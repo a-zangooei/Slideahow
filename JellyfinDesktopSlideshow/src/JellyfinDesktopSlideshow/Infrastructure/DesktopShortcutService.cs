@@ -228,7 +228,7 @@ public sealed class WindowsDesktopShortcutAdapter : IDesktopShortcutPlatformAdap
     private class ShellLink { }
 
     [ComImport]
-    [InterfaceType(InterfaceType.InterfaceIsIUnknown)]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     [Guid("000214F9-0000-0000-C000-000000000046")]
     private interface IShellLinkW
     {
@@ -253,7 +253,7 @@ public sealed class WindowsDesktopShortcutAdapter : IDesktopShortcutPlatformAdap
     }
 
     [ComImport]
-    [InterfaceType(InterfaceType.InterfaceIsIUnknown)]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     [Guid("0000010b-0000-0000-C000-000000000046")]
     private interface IPersistFile
     {
