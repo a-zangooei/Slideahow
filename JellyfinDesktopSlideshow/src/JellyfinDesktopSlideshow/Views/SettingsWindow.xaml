@@ -1,0 +1,378 @@
+<Window x:Class="JellyfinDesktopSlideshow.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="تنظیمات — Jellyfin Desktop Slideshow"
+        Width="780"
+        Height="620"
+        MinWidth="680"
+        MinHeight="520"
+        FlowDirection="RightToLeft"
+        WindowStartupLocation="CenterOwner"
+        Background="#F4F6F9">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TabControl Grid.Row="0" Background="#FFFFFF" BorderBrush="#DCE2EA">
+            <!-- ۱. اتصال به Jellyfin -->
+            <TabItem Header="۱. اتصال به سرور">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+                    <StackPanel MaxWidth="560" HorizontalAlignment="Left">
+                        <TextBlock Text="اتصال و احراز هویت سرور Jellyfin" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
+
+                        <TextBlock Text="آدرس سرور Jellyfin" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBox Text="{Binding ServerUrl, UpdateSourceTrigger=PropertyChanged}"
+                                 FlowDirection="LeftToRight"
+                                 Padding="8,6"
+                                 Margin="0,0,0,10"
+                                 ToolTip="مثال: http://192.168.1.10:8096 یا https://media.example.com" />
+
+                        <TextBlock Text="نام کاربری" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
+                                 FlowDirection="LeftToRight"
+                                 Padding="8,6"
+                                 Margin="0,0,0,10" />
+
+                        <TextBlock Text="رمز عبور" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <PasswordBox x:Name="PasswordInput"
+                                     FlowDirection="LeftToRight"
+                                     Padding="8,6"
+                                     Margin="0,0,0,12" />
+
+                        <WrapPanel Margin="0,0,0,14">
+                            <Button Content="تست اتصال"
+                                    Command="{Binding TestConnectionCommand}"
+                                    Padding="14,7"
+                                    Margin="0,0,8,0" />
+                            <Button Content="ورود و ذخیرهٔ نشست"
+                                    Click="LoginButton_Click"
+                                    Padding="16,7"
+                                    FontWeight="SemiBold"
+                                    Margin="0,0,8,0" />
+                            <Button Content="خروج از حساب"
+                                    Command="{Binding LogoutCommand}"
+                                    Padding="14,7" />
+                        </WrapPanel>
+
+                        <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="12">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="وضعیت: " FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding ConnectionStatus}" FontWeight="Bold" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding ServerDetails}" Foreground="#475569" Margin="0,4,0,0" />
+                                <TextBlock Text="{Binding SecurityWarning}" Foreground="#B45309" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ۲. کتابخانه‌ها و نوع رسانه -->
+            <TabItem Header="۲. کتابخانه‌ها و رسانه">
+                <DockPanel Margin="16">
+                    <TextBlock DockPanel.Dock="Top" Text="انتخاب کتابخانه‌ها و نوع عنوان‌ها" FontSize="15" FontWeight="Bold" Margin="0,0,0,10" />
+
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+                        <CheckBox Content="فیلم‌ها (Movie)" IsChecked="{Binding IncludeMovies}" Margin="0,0,18,0" />
+                        <CheckBox Content="سریال‌ها (Series)" IsChecked="{Binding IncludeSeries}" />
+                    </StackPanel>
+
+                    <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+                        <TextBlock Text="{Binding ItemsSummary}" Foreground="#334155" Margin="0,0,0,8" />
+                        <WrapPanel>
+                            <Button Content="بروزرسانی فهرست کتابخانه‌ها"
+                                    Command="{Binding LoadLibrariesCommand}"
+                                    Padding="14,7"
+                                    Margin="0,0,8,0" />
+                            <Button Content="اعمال فیلتر و دریافت عنوان‌ها"
+                                    Command="{Binding ApplyMediaSelectionCommand}"
+                                    Padding="16,7"
+                                    FontWeight="SemiBold" />
+                        </WrapPanel>
+                    </StackPanel>
+
+                    <ListBox ItemsSource="{Binding Libraries}" BorderBrush="#CBD5E1">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox IsChecked="{Binding IsSelected}" Margin="6,4">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Name}" FontWeight="Medium" />
+                                        <TextBlock Text="{Binding CollectionType, StringFormat=' ({0})'}" Foreground="#64748B" FontSize="11" />
+                                    </StackPanel>
+                                </CheckBox>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </TabItem>
+
+            <!-- ۳. تنظیمات اسلایدشو و والپیپر -->
+            <TabItem Header="۳. اسلایدشو و والپیپر">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+                    <StackPanel MaxWidth="560" HorizontalAlignment="Left">
+                        <TextBlock Text="زمان‌بندی، ترتیب نمایش و رفتار والپیپر دسکتاپ" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="190" />
+                                <ColumnDefinition Width="120" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="10" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="فاصلهٔ تغییر تصویر (ثانیه):" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding SlideshowIntervalSeconds, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="عدم تکرار متوالی (تعداد عنوان):" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding NonRepeatHistoryCount, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
+                        </Grid>
+
+                        <CheckBox Content="پخش تصادفی عنوان‌ها (در غیر این صورت ترتیبی)"
+                                  IsChecked="{Binding IsRandomOrder}"
+                                  Margin="0,0,0,12" />
+
+                        <TextBlock Text="رفتار هنگام قطع اتصال سرور:" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <ComboBox ItemsSource="{Binding OfflineBehaviorOptions}"
+                                  SelectedValue="{Binding SelectedOfflineBehavior}"
+                                  SelectedValuePath="Key"
+                                  DisplayMemberPath="Value"
+                                  Padding="8,5"
+                                  Margin="0,0,0,16" />
+
+                        <Border BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+                            <StackPanel>
+                                <CheckBox Content="اعمال خودکار تصویر اسلایدشو روی والپیپر ویندوز"
+                                          IsChecked="{Binding ApplyToDesktopWallpaper}"
+                                          Margin="0,0,0,8" />
+
+                                <TextBlock Text="حالت چینش تصویر روی صفحه:" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <ComboBox ItemsSource="{Binding WallpaperFitModes}"
+                                          SelectedValue="{Binding SelectedWallpaperFitMode}"
+                                          SelectedValuePath="Key"
+                                          DisplayMemberPath="Value"
+                                          Padding="8,5"
+                                          Margin="0,0,0,10" />
+
+                                <CheckBox Content="بازگردانی والپیپر اولیهٔ ویندوز هنگام خروج کامل از برنامه"
+                                          IsChecked="{Binding RestoreWallpaperOnExit}"
+                                          Margin="0,0,0,8" />
+
+                                <TextBlock Text="{Binding MonitorsSummary}" Foreground="#64748B" FontSize="12" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ۴. ظاهر و جایگاه آیکون -->
+            <TabItem Header="۴. آیکون شناور دسکتاپ">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+                    <StackPanel MaxWidth="520" HorizontalAlignment="Left">
+                        <TextBlock Text="ظاهر و جایگاه آیکون قابل‌کلیک روی دسکتاپ" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
+
+                        <CheckBox Content="نمایش آیکون شناور روی دسکتاپ"
+                                  IsChecked="{Binding ShowOverlayIcon}"
+                                  Margin="0,0,0,14" />
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="120" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="10" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="10" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="10" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="موقعیت افقی (X):" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding OverlayLeft, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="موقعیت عمودی (Y):" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding OverlayTop, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
+
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="اندازهٔ آیکون (24 تا 96 پیکسل):" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding OverlaySize, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
+
+                            <TextBlock Grid.Row="6" Grid.Column="0" Text="شفافیت (0.2 تا 1.0):" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding OverlayOpacity, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
+                        </Grid>
+
+                        <TextBlock Text="تغییرات بلافاصله روی آیکون دسکتاپ اعمال و در محدودهٔ نمایشگرهای فعال تنظیم می‌شوند."
+                                   Foreground="#64748B"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Margin="0,14,0,0" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ۵. مقصد باز کردن عنوان -->
+            <TabItem Header="۵. مقصد باز کردن عنوان">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+                    <StackPanel MaxWidth="560" HorizontalAlignment="Left">
+                        <TextBlock Text="مقصد باز شدن عنوان هنگام کلیک روی آیکون دسکتاپ" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
+
+                        <TextBlock Text="انتخاب مقصد:" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <ComboBox ItemsSource="{Binding PlaybackTargetOptions}"
+                                  SelectedValue="{Binding SelectedPlaybackTargetType}"
+                                  SelectedValuePath="Key"
+                                  DisplayMemberPath="Value"
+                                  Padding="8,5"
+                                  Margin="0,0,0,12" />
+
+                        <StackPanel Visibility="{Binding IsCustomUrlTargetSelected, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,12">
+                            <TextBlock Text="الگوی URL سفارشی (فقط http/https):" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBox Text="{Binding CustomUrlTemplate, UpdateSourceTrigger=PropertyChanged}"
+                                     FlowDirection="LeftToRight"
+                                     Padding="8,6"
+                                     ToolTip="{}{baseUrl}/web/index.html#!/details?id={itemId}&amp;serverId={serverId}" />
+                            <TextBlock Text="متغیرهای مجاز: {baseUrl}، {itemId}، {serverId}" Foreground="#64748B" FontSize="11" Margin="0,4,0,0" />
+                            <TextBlock Text="{Binding CustomUrlValidationMessage}" Foreground="#B91C1C" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" />
+                        </StackPanel>
+
+                        <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="12">
+                            <TextBlock Text="نکته: در حالت «برنامهٔ Jellyfin دسکتاپ»، برنامه از طریق API رسمی نشست‌های Jellyfin عنوان را روی کلاینت فعال باز می‌کند و اگر برنامه نصب یا فعال نباشد، پیشنهاد باز کردن در مرورگر را نمایش می‌دهد."
+                                       Foreground="#475569"
+                                       FontSize="12"
+                                       TextWrapping="Wrap" />
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ۶. کش و تصویر جایگزین -->
+            <TabItem Header="۶. کش و تصویر جایگزین">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+                    <StackPanel MaxWidth="560" HorizontalAlignment="Left">
+                        <TextBlock Text="مدیریت کش محلی، انتخاب Backdrop و تصویر جایگزین" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="210" />
+                                <ColumnDefinition Width="120" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="10" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="10" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="حداکثر حجم کش (مگابایت):" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding MaxCacheSizeMb, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="حداکثر عمر فایل کش (روز):" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding MaxCacheAgeDays, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
+
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="شمارهٔ Backdrop ترجیحی (از 0):" VerticalAlignment="Center" />
+                            <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding BackdropIndexPreference, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
+                        </Grid>
+
+                        <CheckBox Content="انتخاب تصادفی بین Backdropهای هر عنوان"
+                                  IsChecked="{Binding RandomBackdropPerItem}"
+                                  Margin="0,0,0,12" />
+
+                        <TextBlock Text="{Binding CacheSummary}" FontWeight="SemiBold" Foreground="#0F172A" Margin="0,0,0,8" />
+                        <WrapPanel Margin="0,0,0,16">
+                            <Button Content="پاک‌سازی بر اساس محدودیت"
+                                    Command="{Binding PruneCacheCommand}"
+                                    Padding="12,6"
+                                    Margin="0,0,8,0" />
+                            <Button Content="پاک‌سازی کامل کش"
+                                    Command="{Binding ClearCacheCommand}"
+                                    Padding="12,6" />
+                        </WrapPanel>
+
+                        <Border BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Text="تصویر جایگزین (هنگام نبود Backdrop):" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBox Text="{Binding FallbackImagePath, Mode=OneWay}"
+                                         IsReadOnly="True"
+                                         FlowDirection="LeftToRight"
+                                         Padding="6,5"
+                                         Margin="0,0,0,8" />
+                                <WrapPanel>
+                                    <Button Content="انتخاب تصویر جایگزین"
+                                            Click="SelectFallbackButton_Click"
+                                            Padding="12,6"
+                                            Margin="0,0,8,0" />
+                                    <Button Content="حذف جایگزین"
+                                            Command="{Binding ClearFallbackImageCommand}"
+                                            Padding="12,6" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ۷. اجرای خودکار و رفتار برنامه -->
+            <TabItem Header="۷. اجرای خودکار و System Tray">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+                    <StackPanel MaxWidth="560" HorizontalAlignment="Left">
+                        <TextBlock Text="راه‌اندازی خودکار در ویندوز و رفتار پنجره" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
+
+                        <CheckBox Content="اجرای خودکار برنامه هنگام ورود به ویندوز (Current User Run)"
+                                  IsChecked="{Binding LaunchOnWindowsStartup}"
+                                  Margin="0,0,0,10" />
+
+                        <CheckBox Content="شروع برنامه به‌صورت کوچک‌شده در System Tray"
+                                  IsChecked="{Binding StartMinimizedToTray}"
+                                  Margin="0,0,0,10" />
+
+                        <CheckBox Content="هنگام بستن پنجرهٔ اصلی، برنامه در System Tray فعال بماند"
+                                  IsChecked="{Binding MinimizeToTrayOnClose}"
+                                  Margin="0,0,0,14" />
+
+                        <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="12">
+                            <TextBlock Text="تنظیمات پس از هر تغییر به‌صورت امن و اتمیک در مسیر %LOCALAPPDATA%\JellyfinDesktopSlideshow\settings.json ذخیره می‌شوند و توکن دسترسی تنها در Windows Credential Manager نگهداری می‌شود."
+                                       Foreground="#475569"
+                                       FontSize="12"
+                                       TextWrapping="Wrap" />
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,12,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ErrorMessage}" Foreground="#B91C1C" FontSize="12" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding StatusMessage}" Foreground="#0F766E" FontSize="12" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ProgressBar Width="80" Height="12" IsIndeterminate="True"
+                                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"
+                                 Margin="0,0,10,0" />
+                    <Button Content="بستن"
+                            Click="CloseButton_Click"
+                            Padding="18,6"
+                            FontWeight="SemiBold" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
