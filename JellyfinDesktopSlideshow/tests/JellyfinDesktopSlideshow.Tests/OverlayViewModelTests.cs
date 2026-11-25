@@ -46,15 +46,16 @@ public sealed class OverlayViewModelTests
             Assert.Contains("Andor (2022)", vm.ToolTipText);
             Assert.True(vm.OpenCurrentItemCommand.CanExecute(null));
 
-            ItemLaunchResult? capturedResult = null;
-            vm.LaunchCompleted += (_, result) => capturedResult = result;
+            var launchCompletion = new TaskCompletionSource<ItemLaunchResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            vm.LaunchCompleted += (_, result) => launchCompletion.TrySetResult(result);
 
-            await vm.OpenCurrentItemCommand.ExecuteAsync(null);
+            vm.OpenCurrentItemCommand.Execute(null);
+            var capturedResult = await launchCompletion.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Single(launcher.LaunchedItems);
             Assert.Equal("series-99", launcher.LaunchedItems[0].Id);
             Assert.NotNull(capturedResult);
-            Assert.True(capturedResult!.Succeeded);
+            Assert.True(capturedResult.Succeeded);
         }
         finally
         {
