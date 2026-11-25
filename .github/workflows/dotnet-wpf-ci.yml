@@ -1,0 +1,58 @@
+name: Jellyfin Desktop Slideshow CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+  workflow_dispatch:
+
+env:
+  SOLUTION_PATH: JellyfinDesktopSlideshow/JellyfinDesktopSlideshow.sln
+  CONFIGURATION: Release
+
+jobs:
+  build-and-test:
+    name: Build & Unit Tests (.NET 10 WPF)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('JellyfinDesktopSlideshow/**/*.csproj', 'JellyfinDesktopSlideshow/Directory.Build.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore "${{ env.SOLUTION_PATH }}"
+
+      - name: Build solution
+        run: dotnet build "${{ env.SOLUTION_PATH }}" --configuration "${{ env.CONFIGURATION }}" --no-restore
+
+      - name: Run unit tests
+        id: test
+        run: >
+          dotnet test "${{ env.SOLUTION_PATH }}"
+          --configuration "${{ env.CONFIGURATION }}"
+          --no-build
+          --results-directory "${{ runner.temp }}/TestResults"
+          --logger "trx;LogFileName=test-results.trx"
+          --logger "console;verbosity=detailed"
+
+      - name: Upload test results
+        if: ${{ steps.test.outcome == 'success' || steps.test.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ${{ runner.temp }}/TestResults/*.trx
+          retention-days: 14

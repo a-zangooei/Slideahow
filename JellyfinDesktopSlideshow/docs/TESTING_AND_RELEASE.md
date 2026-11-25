@@ -16,6 +16,12 @@
 - `ItemLauncherTests` و `OverlayViewModelTests`: ساخت لینک رسمی وب، ارسال `Viewing` به نشست کلاینت دسکتاپ، پیشنهاد مرورگر در نبود کلاینت، جلوگیری از تزریق دستور در URL سفارشی و همگام‌سازی آیکون شناور.
 - `StartupServiceTests` و `SettingsViewModelTests` و `SettingsServiceTests`: ثبت کلید رجیستری با نقل‌قول ایمن و `--minimized`، محدودسازی مقادیر تنظیمات ۷بخشی و عدم وجود رمز در `settings.json`.
 
+### یکپارچه‌سازی مداوم (GitHub Actions CI)
+- **مسیر Workflow:** `.github/workflows/dotnet-wpf-ci.yml`
+- **رویدادهای اجرا:** `push` (به همهٔ شاخه‌ها)، `pull_request` و اجرای دستی (`workflow_dispatch`)
+- **محیط اجرا:** `windows-latest` با `.NET 10 SDK` (`10.0.x`) و کش بسته‌های NuGet (`~/.nuget/packages`)
+- **جداسازی از محیط تعاملی/محرمانه:** تمام تست‌های پروژهٔ `JellyfinDesktopSlideshow.Tests` با Fake/Stub (شبکه، رجیستری، تایمر، Credential Storage و دایرکتوری موقت) اجرا می‌شوند و هیچ نیازی به سرور واقعی Jellyfin، پنجرهٔ تعاملی دسکتاپ یا رمز/توکن ندارند. گزارش تست‌ها هم در کنسول با جزئیات کامل چاپ می‌شود و هم به‌صورت فایل `.trx` در Artifact با نام `test-results` ذخیره می‌گردد.
+
 ---
 
 ## ۲. سناریوهای تست دستی روی ویندوز

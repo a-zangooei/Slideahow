@@ -26,8 +26,12 @@
 
 ### ۱. اجرای تست‌های واحد (xUnit)
 ```powershell
-dotnet test
+dotnet restore JellyfinDesktopSlideshow.sln
+dotnet build JellyfinDesktopSlideshow.sln --configuration Release --no-restore
+dotnet test JellyfinDesktopSlideshow.sln --configuration Release --no-build --verbosity normal
 ```
+
+> **یکپارچه‌سازی مداوم (GitHub Actions CI):** فایل `.github/workflows/dotnet-wpf-ci.yml` به‌صورت خودکار روی `windows-latest` با `.NET 10 SDK` (`10.0.x`) در هر `push` (تمام شاخه‌ها)، `pull_request` و اجرای دستی (`workflow_dispatch`) مراحل بالا را اجرا می‌کند.
 
 ### ۲. ساخت پروژه (Debug)
 ```powershell
