@@ -7,10 +7,12 @@
 
     <MajorUpgrade DowngradeErrorMessage="نسخهٔ جدیدتر [ProductName] هم‌اکنون نصب است." />
     <MediaTemplate EmbedCab="yes" />
+    <Property Id="DISABLEADVTSHORTCUTS" Value="1" />
 
     <Feature Id="MainFeature" Title="Jellyfin Desktop Slideshow" Level="1">
       <ComponentGroupRef Id="ApplicationFiles" />
-      <ComponentRef Id="StartMenuShortcutComponent" />
+      <ComponentRef Id="MainExecutableComponent" />
+      <ComponentRef Id="InstallMarkerComponent" />
     </Feature>
   </Package>
 
@@ -19,27 +21,34 @@
       <Directory Id="INSTALLFOLDER" Name="Jellyfin Desktop Slideshow" />
     </StandardDirectory>
 
-    <StandardDirectory Id="CommonProgramsFolder">
-      <Directory Id="ApplicationProgramsFolder" Name="Jellyfin Desktop Slideshow" />
-    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
   </Fragment>
 
   <Fragment>
     <ComponentGroup Id="ApplicationFiles" Directory="INSTALLFOLDER">
-      <Files Include="$(var.PayloadDir)\**" />
+      <Files Include="$(var.PayloadDir)\**">
+        <Exclude Files="$(var.PayloadDir)\JellyfinDesktopSlideshow.exe" />
+      </Files>
     </ComponentGroup>
 
-    <Component Id="StartMenuShortcutComponent"
-               Directory="ApplicationProgramsFolder"
+    <Component Id="MainExecutableComponent"
+               Directory="INSTALLFOLDER"
                Guid="C3E8A41F-9B52-4F6D-8A10-5C7E9B2D3F40">
-      <Shortcut Id="ApplicationStartMenuShortcut"
-                Name="Jellyfin Desktop Slideshow"
-                Description="اسلایدشوی دسکتاپ تصاویر پس‌زمینه Jellyfin"
-                Target="[INSTALLFOLDER]JellyfinDesktopSlideshow.exe"
-                WorkingDirectory="INSTALLFOLDER" />
-      <RemoveFolder Id="CleanUpApplicationProgramsFolder"
-                    Directory="ApplicationProgramsFolder"
-                    On="uninstall" />
+      <File Id="JellyfinDesktopSlideshowExe"
+            Source="$(var.PayloadDir)\JellyfinDesktopSlideshow.exe"
+            KeyPath="yes">
+        <Shortcut Id="ApplicationStartMenuShortcut"
+                  Directory="ProgramMenuFolder"
+                  Name="Jellyfin Desktop Slideshow"
+                  Description="اسلایدشوی دسکتاپ تصاویر پس‌زمینه Jellyfin"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Advertise="yes" />
+      </File>
+    </Component>
+
+    <Component Id="InstallMarkerComponent"
+               Directory="INSTALLFOLDER"
+               Guid="D4F9B520-A163-4E7C-9B21-6D8F0C3E4A51">
       <RegistryValue Root="HKLM"
                      Key="Software\JellyfinDesktopSlideshow"
                      Name="installed"
