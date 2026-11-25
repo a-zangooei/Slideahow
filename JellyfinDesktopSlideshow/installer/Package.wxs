@@ -1,0 +1,51 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Jellyfin Desktop Slideshow"
+           Manufacturer="Jellyfin Desktop Slideshow Contributors"
+           Version="$(var.AppVersion)"
+           UpgradeCode="A7C4F9B2-6E31-4D8A-9C1B-2E7F4A5B8D01"
+           Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="نسخهٔ جدیدتر [ProductName] هم‌اکنون نصب است." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="MainFeature" Title="Jellyfin Desktop Slideshow" Level="1">
+      <ComponentGroupRef Id="ApplicationFiles" />
+      <ComponentRef Id="StartMenuShortcutComponent" />
+    </Feature>
+  </Package>
+
+  <Fragment>
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="Jellyfin Desktop Slideshow" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Jellyfin Desktop Slideshow" />
+    </StandardDirectory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="ApplicationFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PayloadDir)\**" />
+    </ComponentGroup>
+
+    <Component Id="StartMenuShortcutComponent"
+               Directory="ApplicationProgramsFolder"
+               Guid="C3E8A41F-9B52-4F6D-8A10-5C7E9B2D3F40">
+      <Shortcut Id="ApplicationStartMenuShortcut"
+                Name="Jellyfin Desktop Slideshow"
+                Description="اسلایدشوی دسکتاپ تصاویر پس‌زمینه Jellyfin"
+                Target="[INSTALLFOLDER]JellyfinDesktopSlideshow.exe"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="CleanUpApplicationProgramsFolder"
+                    Directory="ApplicationProgramsFolder"
+                    On="uninstall" />
+      <RegistryValue Root="HKMU"
+                     Key="Software\JellyfinDesktopSlideshow"
+                     Name="installed"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes" />
+    </Component>
+  </Fragment>
+</Wix>

@@ -9,11 +9,14 @@ on:
 
 env:
   SOLUTION_PATH: JellyfinDesktopSlideshow/JellyfinDesktopSlideshow.sln
+  APP_PROJECT_PATH: JellyfinDesktopSlideshow/src/JellyfinDesktopSlideshow/JellyfinDesktopSlideshow.csproj
+  INSTALLER_PROJECT_PATH: JellyfinDesktopSlideshow/installer/JellyfinDesktopSlideshow.Installer.wixproj
   CONFIGURATION: Release
+  RUNTIME_ID: win-x64
 
 jobs:
-  build-and-test:
-    name: Build & Unit Tests (.NET 10 WPF)
+  build-test-package:
+    name: Build, Test & Package (.NET 10 WPF)
     runs-on: windows-latest
 
     steps:
@@ -25,15 +28,28 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Read application version
+        shell: pwsh
+        run: |
+          [xml]$csproj = Get-Content "${{ env.APP_PROJECT_PATH }}"
+          $version = $csproj.Project.PropertyGroup.Version | Select-Object -First 1
+          if ([string]::IsNullOrWhiteSpace($version)) { $version = "1.0.0" }
+          $parts = $version.Split('.')
+          $major = if ($parts.Length -ge 1) { $parts[0] } else { "1" }
+          $minor = if ($parts.Length -ge 2) { $parts[1] } else { "0" }
+          $msiVersion = "$major.$minor.${{ github.run_number }}"
+          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "MSI_VERSION=$msiVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Cache NuGet packages
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('JellyfinDesktopSlideshow/**/*.csproj', 'JellyfinDesktopSlideshow/Directory.Build.props') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('JellyfinDesktopSlideshow/**/*.csproj', 'JellyfinDesktopSlideshow/**/*.wixproj', 'JellyfinDesktopSlideshow/Directory.Build.props') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Restore dependencies
+      - name: Restore solution dependencies
         run: dotnet restore "${{ env.SOLUTION_PATH }}"
 
       - name: Build solution
@@ -56,3 +72,67 @@ jobs:
           name: test-results
           path: ${{ runner.temp }}/TestResults/*.trx
           retention-days: 14
+
+      - name: Publish standalone portable EXE (self-contained win-x64)
+        shell: pwsh
+        run: |
+          $publishExeDir = [System.IO.Path]::GetFullPath((Join-Path "${{ runner.temp }}" "publish-exe"))
+          $artifactExeDir = [System.IO.Path]::GetFullPath((Join-Path "${{ runner.temp }}" "artifacts\exe"))
+          New-Item -ItemType Directory -Force -Path $artifactExeDir | Out-Null
+
+          dotnet publish "${{ env.APP_PROJECT_PATH }}" `
+            --configuration "${{ env.CONFIGURATION }}" `
+            --runtime "${{ env.RUNTIME_ID }}" `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=none `
+            -p:DebugSymbols=false `
+            --output "$publishExeDir"
+
+          $sourceExe = Join-Path $publishExeDir "JellyfinDesktopSlideshow.exe"
+          if (-not (Test-Path $sourceExe)) {
+            throw "Published executable not found at $sourceExe"
+          }
+
+          $targetExe = Join-Path $artifactExeDir "JellyfinDesktopSlideshow-${{ env.APP_VERSION }}-build${{ github.run_number }}-${{ env.RUNTIME_ID }}.exe"
+          Copy-Item -Path $sourceExe -Destination $targetExe -Force
+
+      - name: Publish payload and build MSI installer (WiX v5)
+        shell: pwsh
+        run: |
+          $publishMsiDir = [System.IO.Path]::GetFullPath((Join-Path "${{ runner.temp }}" "publish-msi"))
+          $artifactMsiDir = [System.IO.Path]::GetFullPath((Join-Path "${{ runner.temp }}" "artifacts\msi"))
+          New-Item -ItemType Directory -Force -Path $artifactMsiDir | Out-Null
+
+          dotnet publish "${{ env.APP_PROJECT_PATH }}" `
+            --configuration "${{ env.CONFIGURATION }}" `
+            --runtime "${{ env.RUNTIME_ID }}" `
+            --self-contained true `
+            -p:PublishSingleFile=false `
+            -p:DebugType=none `
+            -p:DebugSymbols=false `
+            --output "$publishMsiDir"
+
+          dotnet restore "${{ env.INSTALLER_PROJECT_PATH }}"
+          dotnet build "${{ env.INSTALLER_PROJECT_PATH }}" `
+            --configuration "${{ env.CONFIGURATION }}" `
+            --no-restore `
+            -p:PayloadDir="$publishMsiDir" `
+            -p:AppVersion="${{ env.MSI_VERSION }}" `
+            -p:OutputName="JellyfinDesktopSlideshow-${{ env.APP_VERSION }}-build${{ github.run_number }}-${{ env.RUNTIME_ID }}" `
+            --output "$artifactMsiDir"
+
+      - name: Upload portable EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JellyfinDesktopSlideshow-${{ env.APP_VERSION }}-build${{ github.run_number }}-${{ env.RUNTIME_ID }}-exe
+          path: ${{ runner.temp }}/artifacts/exe/*.exe
+          retention-days: 30
+
+      - name: Upload MSI installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JellyfinDesktopSlideshow-${{ env.APP_VERSION }}-build${{ github.run_number }}-${{ env.RUNTIME_ID }}-msi
+          path: ${{ runner.temp }}/artifacts/msi/*.msi
+          retention-days: 30

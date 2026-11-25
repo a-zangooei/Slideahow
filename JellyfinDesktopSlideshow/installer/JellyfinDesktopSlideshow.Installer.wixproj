@@ -1,0 +1,12 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
+    <InstallerPlatform>$(Platform)</InstallerPlatform>
+    <OutputName Condition=" '$(OutputName)' == '' ">JellyfinDesktopSlideshow-win-x64</OutputName>
+    <AppVersion Condition=" '$(AppVersion)' == '' ">1.0.0</AppVersion>
+    <PayloadDir Condition=" '$(PayloadDir)' == '' ">..\src\JellyfinDesktopSlideshow\bin\Release\net10.0-windows\win-x64\publish</PayloadDir>
+    <CleanPayloadDir>$([System.String]::Copy('$(PayloadDir)').TrimEnd('\').TrimEnd('/'))</CleanPayloadDir>
+    <DefineConstants>$(DefineConstants);PayloadDir=$(CleanPayloadDir);AppVersion=$(AppVersion)</DefineConstants>
+  </PropertyGroup>
+</Project>

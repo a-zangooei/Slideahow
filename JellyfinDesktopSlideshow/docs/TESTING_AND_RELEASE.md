@@ -16,11 +16,15 @@
 - `ItemLauncherTests` و `OverlayViewModelTests`: ساخت لینک رسمی وب، ارسال `Viewing` به نشست کلاینت دسکتاپ، پیشنهاد مرورگر در نبود کلاینت، جلوگیری از تزریق دستور در URL سفارشی و همگام‌سازی آیکون شناور.
 - `StartupServiceTests` و `SettingsViewModelTests` و `SettingsServiceTests`: ثبت کلید رجیستری با نقل‌قول ایمن و `--minimized`، محدودسازی مقادیر تنظیمات ۷بخشی و عدم وجود رمز در `settings.json`.
 
-### یکپارچه‌سازی مداوم (GitHub Actions CI)
+### یکپارچه‌سازی مداوم (GitHub Actions CI) و بسته‌بندی خروجی‌ها
 - **مسیر Workflow:** `.github/workflows/dotnet-wpf-ci.yml`
 - **رویدادهای اجرا:** `push` (به همهٔ شاخه‌ها)، `pull_request` و اجرای دستی (`workflow_dispatch`)
-- **محیط اجرا:** `windows-latest` با `.NET 10 SDK` (`10.0.x`) و کش بسته‌های NuGet (`~/.nuget/packages`)
+- **محیط اجرا:** `windows-latest` با `.NET 10 SDK` (`10.0.x`) و کش بسته‌های NuGet (`~/.nuget/packages` شامل بسته‌های `WixToolset.Sdk`)
 - **جداسازی از محیط تعاملی/محرمانه:** تمام تست‌های پروژهٔ `JellyfinDesktopSlideshow.Tests` با Fake/Stub (شبکه، رجیستری، تایمر، Credential Storage و دایرکتوری موقت) اجرا می‌شوند و هیچ نیازی به سرور واقعی Jellyfin، پنجرهٔ تعاملی دسکتاپ یا رمز/توکن ندارند. گزارش تست‌ها هم در کنسول با جزئیات کامل چاپ می‌شود و هم به‌صورت فایل `.trx` در Artifact با نام `test-results` ذخیره می‌گردد.
+- **مراحل پس از موفقیت تست‌ها (Publish و Packaging):**
+  1. **خروجی `.exe` قابل‌حمل:** با دستور `dotnet publish` به‌صورت `--self-contained true`، `PublishSingleFile=true` و `win-x64` تولید و در Artifact با نام `JellyfinDesktopSlideshow-<version>-build<N>-win-x64-exe` بارگذاری می‌شود. انتخاب Self-Contained باعث می‌شود کاربر به نصب جداگانهٔ `.NET 10 Desktop Runtime` نیاز نداشته باشد (اثر جانبی: افزایش حجم فایل از حدود ۱–۲ مگابایت به حدود ۱۴۰–۱۷۰ مگابایت).
+  2. **نصاب `.msi`:** با پروژهٔ `JellyfinDesktopSlideshow/installer/JellyfinDesktopSlideshow.Installer.wixproj` (مبتنی بر **WiX Toolset v5 / `WixToolset.Sdk/5.0.2`**) و پکیج کردن خروجی Self-Contained غیرتک‌فایلی (برای سرعت اجرای بالاتر و جلوگیری از استخراج موقت در هر اجرا) ساخته و در Artifact با نام `JellyfinDesktopSlideshow-<version>-build<N>-win-x64-msi` بارگذاری می‌شود.
+- **امضای دیجیتال (Code Signing) در آینده:** فعلاً فایل‌های `.exe` و `.msi` بدون امضای دیجیتال (Unsigned) تولید می‌شوند و هیچ گواهی یا رمز جعلی در workflow نیست. برای حذف هشدار Windows SmartScreen در انتشار عمومی آینده، می‌توان یک گام جداگانه با `signtool.exe` (با استفاده از گواهی Code Signing ذخیره‌شده در GitHub Environment Secrets یا Azure Trusted Signing) پس از ساخت `.exe` و `.msi` و پیش از `upload-artifact` اضافه کرد.
 
 ---
 

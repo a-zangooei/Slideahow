@@ -43,16 +43,26 @@ dotnet build -c Debug
 dotnet run --project src/JellyfinDesktopSlideshow/JellyfinDesktopSlideshow.csproj
 ```
 
-### ۴. ساخت نسخهٔ نهایی (Release) برای نصب روی ویندوز
-برای ساخت فایل‌های انتشار (وابسته به Desktop Runtime نصب‌شده با حجم کم):
+### ۴. ساخت نسخهٔ نهایی (`.exe` مستقل و `.msi` نصبی)
+بسته‌های خروجی روی `win-x64` به‌صورت **Self-Contained** ساخته می‌شوند تا کاربر نهایی بدون نیاز به نصب **‎.NET 10 Desktop Runtime** بتواند برنامه را مستقیماً اجرا کند (در مقابل خروجی Framework-Dependent که حدود ۱ تا ۲ مگابایت حجم دارد ولی به نصب پیش‌فرض Runtime نیازمند است؛ خروجی Self-Contained حجم بیشتری — حدود ۱۴۰ تا ۱۷۰ مگابایت — دارد اما بدون پیش‌نیاز روی ویندوز ۱۰/۱۱ اجرا می‌شود).
+
+- **ساخت فایل `.exe` قابل‌حمل (Single-File Portable):**
 ```powershell
-dotnet publish src/JellyfinDesktopSlideshow/JellyfinDesktopSlideshow.csproj -c Release -r win-x64 --self-contained false -o ./publish/win-x64-fd
+dotnet publish src/JellyfinDesktopSlideshow/JellyfinDesktopSlideshow.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:DebugSymbols=false -o ./publish/win-x64-standalone
 ```
 
-یا ساخت نسخهٔ **کاملاً مستقل (Self-Contained Single File)** بدون نیاز به نصب پیش‌فرض .NET روی سیستم مقصد:
+- **ساخت فایل نصبی `.msi` با WiX Toolset v5 (`WixToolset.Sdk/5.0.2`):**
 ```powershell
-dotnet publish src/JellyfinDesktopSlideshow/JellyfinDesktopSlideshow.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o ./publish/win-x64-standalone
+dotnet publish src/JellyfinDesktopSlideshow/JellyfinDesktopSlideshow.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:DebugType=none -p:DebugSymbols=false -o ./publish/win-x64-msi-payload
+dotnet restore installer/JellyfinDesktopSlideshow.Installer.wixproj
+dotnet build installer/JellyfinDesktopSlideshow.Installer.wixproj -c Release --no-restore -p:PayloadDir="$(Resolve-Path ./publish/win-x64-msi-payload)" -p:AppVersion="1.0.0" -o ./publish/win-x64-msi
 ```
+
+### ۵. دانلود Artifactها از GitHub Actions
+پس از موفقیت Build و تست‌ها در اجرای workflow (`.github/workflows/dotnet-wpf-ci.yml`)، در صفحهٔ آن اجرا روی GitHub وارد بخش **Artifacts** شوید:
+- **`JellyfinDesktopSlideshow-<version>-build<N>-win-x64-exe`**: فایل `.exe` قابل‌حمل (بدون نیاز به نصب؛ کافی است دانلود و اجرا کنید).
+- **`JellyfinDesktopSlideshow-<version>-build<N>-win-x64-msi`**: نصاب استاندارد ویندوز (نصب در `Program Files\Jellyfin Desktop Slideshow`، افزودن میانبر در Start Menu و پشتیبانی از حذف/ارتقا از طریق Apps & Features؛ نیازمند دسترسی مدیر سیستم هنگام نصب).
+- **`test-results`**: فایل گزارش تست‌های خودکار با فرمت `.trx`.
 
 ---
 
