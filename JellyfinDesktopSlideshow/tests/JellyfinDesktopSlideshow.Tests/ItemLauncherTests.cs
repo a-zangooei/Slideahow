@@ -214,23 +214,65 @@ public sealed class ItemLauncherTests
     private sealed class FakeJellyfinClient : IJellyfinClient
     {
         public List<JellyfinSessionInfo> Sessions { get; set; } = [];
-        public List<(string SessionId, string ItemId, string ItemType, string ItemName)> ViewingCalls { get; } = [];
+        public List<(string SessionId, string ItemId, string ItemType, string? ItemName)> ViewingCalls { get; } = [];
 
         public Task<IReadOnlyList<JellyfinSessionInfo>> GetSessionsAsync(Uri serverUri, string accessToken, string deviceId, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<JellyfinSessionInfo>>(Sessions);
 
-        public Task SendSessionViewingAsync(Uri serverUri, string sessionId, string itemId, string itemType, string itemName, string accessToken, string deviceId, CancellationToken cancellationToken = default)
+        public Task SendSessionViewingAsync(Uri serverUri, string sessionId, string itemId, string itemType, string? itemName, string accessToken, string deviceId, CancellationToken cancellationToken = default)
         {
             ViewingCalls.Add((sessionId, itemId, itemType, itemName));
             return Task.CompletedTask;
         }
 
-        public Task<ServerPublicInfo> GetPublicInfoAsync(Uri serverUri, string deviceId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<AuthResult> AuthenticateByNameAsync(Uri serverUri, string username, string password, string deviceId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<string> ValidateCurrentUserAsync(Uri serverUri, string accessToken, string deviceId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<JellyfinLibrary>> GetUserViewsAsync(Uri serverUri, string userId, string accessToken, string deviceId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<MediaItem>> GetMediaItemsAsync(Uri serverUri, string userId, string accessToken, string deviceId, IReadOnlyCollection<string> libraryIds, IReadOnlyCollection<string> includeItemTypes, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<JellyfinImageResult> DownloadBackdropImageAsync(Uri serverUri, string itemId, int backdropIndex, string? tag, int maxWidth, int quality, string accessToken, string deviceId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task LogoutAsync(Uri serverUri, string accessToken, string deviceId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ServerPublicInfo> GetPublicServerInfoAsync(Uri serverUri, CancellationToken cancellationToken = default)
+            => Task.FromResult(new ServerPublicInfo
+            {
+                ServerId = "srv001",
+                ServerName = "TestServer",
+                Version = "10.10.0"
+            });
+
+        public Task<AuthResult> AuthenticateByNameAsync(Uri serverUri, string username, string password, string deviceId, CancellationToken cancellationToken = default)
+            => Task.FromResult(new AuthResult
+            {
+                UserId = "user1",
+                Username = username,
+                AccessToken = "secret-token-for-test",
+                ServerId = "srv001"
+            });
+
+        public Task<bool> ValidateSessionAsync(Uri serverUri, string accessToken, string deviceId, CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
+
+        public Task<IReadOnlyList<JellyfinLibrary>> GetUserViewsAsync(Uri serverUri, string userId, string accessToken, string deviceId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<JellyfinLibrary>>([]);
+
+        public Task<(IReadOnlyList<MediaItem> Items, int TotalRecordCount)> GetItemsAsync(
+            Uri serverUri,
+            string userId,
+            string accessToken,
+            string deviceId,
+            string? parentId,
+            IReadOnlyList<string> includeItemTypes,
+            int startIndex,
+            int limit,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<(IReadOnlyList<MediaItem> Items, int TotalRecordCount)>(([], 0));
+
+        public Task<(byte[] Bytes, string? ContentType)> DownloadBackdropImageAsync(
+            Uri serverUri,
+            string itemId,
+            int imageIndex,
+            string? tag,
+            int maxWidth,
+            int quality,
+            string accessToken,
+            string deviceId,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<(byte[] Bytes, string? ContentType)>(([], "image/png"));
+
+        public Task LogoutAsync(Uri serverUri, string accessToken, string deviceId, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 }

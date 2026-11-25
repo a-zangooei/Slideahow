@@ -153,7 +153,7 @@ public sealed class SettingsViewModelTests : IDisposable
     {
         public Task<IReadOnlyList<JellyfinLibrary>> GetAccessibleLibrariesAsync(CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<JellyfinLibrary>>([]);
-        public Task<IReadOnlyList<MediaItem>> GetMediaItemsAsync(IReadOnlyCollection<string> selectedLibraryIds, IReadOnlyCollection<string> includedItemTypes, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyList<MediaItem>> GetMediaItemsAsync(IReadOnlyList<string> libraryIds, IReadOnlyList<string> includeItemTypes, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<MediaItem>>([]);
     }
 
