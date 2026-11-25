@@ -268,7 +268,8 @@ public sealed class WallpaperService : IWallpaperService
             }
 
             var originalMode = snapshot.OriginalBackgroundMode;
-            ClearCapturedState();
+            var keepRestoredBackupFile = PathsEqual(compatibleRestorePath, snapshot.BackupImagePath);
+            ClearCapturedState(deleteBackupFile: !keepRestoredBackupFile);
             LastAppliedWallpaperPath = null;
             _verifiedCurrentProcessSession = false;
 
@@ -417,7 +418,7 @@ public sealed class WallpaperService : IWallpaperService
         }
     }
 
-    private void ClearCapturedState()
+    private void ClearCapturedState(bool deleteBackupFile = true)
     {
         string? backupToDelete;
         lock (_stateLock)
@@ -437,7 +438,10 @@ public sealed class WallpaperService : IWallpaperService
             }
         }
 
-        DeleteBackupFileIfExists(backupToDelete);
+        if (deleteBackupFile)
+        {
+            DeleteBackupFileIfExists(backupToDelete);
+        }
     }
 
     private void PersistStateLocked()
@@ -476,6 +480,11 @@ public sealed class WallpaperService : IWallpaperService
                 : ".img";
 
             Directory.CreateDirectory(_backupDirectory);
+            foreach (var staleBackup in Directory.GetFiles(_backupDirectory, "original_wallpaper.*"))
+            {
+                DeleteBackupFileIfExists(staleBackup);
+            }
+
             var targetPath = Path.Combine(_backupDirectory, $"original_wallpaper{extension}");
             var tempPath = $"{targetPath}.{Guid.NewGuid():N}.tmp";
             File.WriteAllBytes(tempPath, bytes);
@@ -538,8 +547,7 @@ public sealed class WallpaperService : IWallpaperService
         }
 
         return IsPathInsideDirectory(candidatePath, _stagingDirectory) ||
-               IsPathInsideDirectory(candidatePath, _managedCacheDirectory) ||
-               IsPathInsideDirectory(candidatePath, _backupDirectory);
+               IsPathInsideDirectory(candidatePath, _managedCacheDirectory);
     }
 
     private static bool IsWindowsVolatileThemePath(string? path)

@@ -322,7 +322,52 @@ public sealed class WallpaperServiceTests : IDisposable
         Assert.True(restore.Succeeded);
         Assert.NotNull(adapter.LastRestorePath);
         Assert.NotEqual(transcodedPath, adapter.LastRestorePath);
+        Assert.True(File.Exists(adapter.LastRestorePath));
         Assert.Equal(originalJpgBytes, await File.ReadAllBytesAsync(adapter.LastRestorePath!));
+    }
+
+    [Fact]
+    public async Task RestoreOriginalWallpaperAsync_VolatileTranscodedWallpaper_SubsequentSessionCanRecaptureAndRestore()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var themesDir = Path.Combine(_tempDir, "Microsoft", "Windows", "Themes");
+        Directory.CreateDirectory(themesDir);
+        var transcodedPath = Path.Combine(themesDir, "TranscodedWallpaper");
+        var slide1Path = Path.Combine(_tempDir, "slide1.png");
+        var slide2Path = Path.Combine(_tempDir, "slide2.png");
+        var stateFilePath = Path.Combine(_tempDir, "wallpaper-state.json");
+
+        var originalJpgBytes = CreateValidJpgBytes(128);
+        await File.WriteAllBytesAsync(transcodedPath, originalJpgBytes);
+        await File.WriteAllBytesAsync(slide1Path, CacheServiceTests.CreateValidPngBytes(128));
+        await File.WriteAllBytesAsync(slide2Path, CacheServiceTests.CreateValidPngBytes(128));
+
+        var adapter = new FakeWallpaperPlatformAdapter
+        {
+            CurrentWallpaper = transcodedPath,
+            CurrentWallpaperStyle = "10",
+            CurrentTileWallpaper = "0",
+            VolatileThemePathToOverwrite = transcodedPath
+        };
+
+        var (session1, _) = CreateService(adapter, stateFilePath: stateFilePath);
+        await session1.ApplyWallpaperAsync(slide1Path);
+        var restore1 = await session1.RestoreOriginalWallpaperAsync();
+        Assert.True(restore1.Succeeded);
+
+        var restoredBackupPath = adapter.CurrentWallpaper;
+        Assert.NotNull(restoredBackupPath);
+        Assert.True(File.Exists(restoredBackupPath));
+
+        // Session 2 starts while Windows points to the restored backup file.
+        var (session2, _) = CreateService(adapter, stateFilePath: stateFilePath);
+        await session2.ApplyWallpaperAsync(slide2Path);
+        Assert.True(session2.HasCapturedOriginalWallpaper);
+
+        var restore2 = await session2.RestoreOriginalWallpaperAsync();
+        Assert.True(restore2.Succeeded);
+        Assert.Equal(restoredBackupPath, adapter.LastRestorePath);
+        Assert.Equal(originalJpgBytes, await File.ReadAllBytesAsync(restoredBackupPath!));
     }
 
     [Fact]
