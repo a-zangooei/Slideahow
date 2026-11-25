@@ -412,6 +412,11 @@ public sealed class MainViewModel : ViewModelBase
         IsOverlayVisible = _overlayService.IsVisible;
         RefreshCacheSummary();
         MonitorsSummary = _wallpaperService.GetMonitorsSummary();
+        if (!settings.ApplyToDesktopWallpaper)
+        {
+            _lastAppliedSlidePath = null;
+            WallpaperStatus = "اعمال خودکار والپیپر غیرفعال است.";
+        }
 
         if (!IsAuthenticated)
         {

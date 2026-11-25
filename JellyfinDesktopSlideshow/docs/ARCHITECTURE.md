@@ -53,10 +53,17 @@ JellyfinDesktopSlideshow/
    - حالت **Random** از تاریخچهٔ عدم تکرار (`NonRepeatHistoryCount`) استفاده می‌کند تا عناوین اخیر بلافاصله تکرار نشوند.
    - در حالت شکست مداوم شبکه، مکانیزم **Exponential Backoff** بازهٔ تلاش مجدد را تا سقف ۵ دقیقه افزایش می‌دهد تا به سرور یا CPU فشاری وارد نشود.
 
-5. **اعمال والپیپر (`WallpaperService` + `WindowsWallpaperPlatformAdapter`):**
-   - ابتدا مسیر والپیپر فعلی کاربر ذخیره می‌شود تا در صورت فعال بودن `RestoreWallpaperOnExit` هنگام خروج بازگردانده شود.
-   - فایل‌های `.webp` به `.png` تبدیل می‌شوند تا در تمام نسخه‌های ویندوز بدون خطای فرمت اعمال شوند.
-   - حالت نمایش (`Fill`, `Fit`, `Stretch`, `Center`, `Span`) در کلید رجیستری `Control Panel\Desktop` (`WallpaperStyle` و `TileWallpaper`) تنظیم و سپس `SystemParametersInfoW(SPI_SETDESKWALLPAPER, ...)` فراخوانی می‌شود.
+5. **اعمال و بازگردانی والپیپر (`WallpaperService` + `WindowsWallpaperPlatformAdapter`):**
+   - **تنظیماتی که برنامه تغییر می‌دهد:** کلیدهای رجیستری `HKCU\Control Panel\Desktop\WallpaperStyle` و `TileWallpaper`، مقدار `Wallpaper` (از طریق `SystemParametersInfoW(SPI_SETDESKWALLPAPER, ...)` با پرچم‌های `SPIF_UPDATEINIFILE | SPIF_SENDCHANGE`) و فایل کش داخلی ویندوز `TranscodedWallpaper` هنگام اعمال تصویر جدید.
+   - **ذخیرهٔ وضعیت اولیه پیش از اولین تغییر:** `GetCurrentDesktopWallpaperState()` مسیر فعال (`SPI_GETDESKWALLPAPER`)، مقادیر خام `WallpaperStyle` و `TileWallpaper` (از جمله حالت `Tile` با `0/1` که در `WallpaperFitMode` نیست) و `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers\BackgroundType` را می‌خواند و به‌صورت اتمیک در `%LOCALAPPDATA%\JellyfinDesktopSlideshow\wallpaper-state.json` ذخیره می‌کند. اگر مسیر اولیه به فایل موقت ویندوز (`%AppData%\Microsoft\Windows\Themes\TranscodedWallpaper`) اشاره کند، پیش از تغییر یک کپی پشتیبان در `%LOCALAPPDATA%\JellyfinDesktopSlideshow\backup\` ساخته می‌شود.
+   - **جلوگیری از بازنویسی با والپیپر خود برنامه و بازیابی پس از خروج ناگهانی:** در تغییرهای بعدی اسلایدشو و نیز پس از راه‌اندازی مجدد بعد از کرش، وضعیت ذخیره‌شدهٔ دیسک حفظ می‌شود و مسیرهای داخل پوشه‌های داخلی برنامه (`cache\wallpaper`، `cache\backdrops`، `backup`) هرگز به‌عنوان وضعیت اولیهٔ کاربر ذخیره نمی‌شوند. اگر کاربر پس از کرش و پیش از اجرای مجدد برنامه، والپیپر ویندوز را به‌صورت دستی تغییر داده باشد، این تغییر تشخیص داده می‌شود تا روی انتخاب جدید کاربر بازنویسی نشود.
+   - **بازگردانی:** هنگام غیرفعال‌شدن `ApplyToDesktopWallpaper` در تنظیمات یا هنگام خروج کامل (در صورت فعال بودن `RestoreWallpaperOnExit`)، مسیر ذخیره‌شده و مقادیر خام `WallpaperStyle`/`TileWallpaper` مستقیماً از طریق `RestoreDesktopWallpaper(...)` بازگردانده می‌شوند (بدون اعمال `WallpaperFitMode` برنامه).
+   - **محدودیت‌های شناخته‌شده در ویندوز ۱۰/۱۱ (مستند و بدون fallback مخرب):**
+     - **Windows Slideshow (`BackgroundType = 2`) و Windows Spotlight (`BackgroundType = 3`):** آخرین تصویر استاتیک و چینش آن قابل بازگردانی است، اما فعال‌سازی خودکار چرخش `Windows Slideshow` یا سرویس پویا `Windows Spotlight` از طریق `SystemParametersInfoW` امکان‌پذیر نیست و به کاربر اطلاع داده می‌شود.
+     - **پس‌زمینهٔ رنگ یکدست (`Solid Color` / `BackgroundType = 1`):** ارسال رشتهٔ خالی به `SPI_SETDESKWALLPAPER` در ویندوز ۱۰/۱۱ می‌تواند صفحه را سیاه کند؛ بنابراین برنامه تغییر مخرب انجام نمی‌دهد و محدودیت را گزارش می‌کند.
+     - **والپیپر متفاوت برای هر مانیتور:** `SPI_GETDESKWALLPAPER` / `SPI_SETDESKWALLPAPER` تک‌مسیر سراسری است و چیدمان چندتصویریِ مجزا به‌ازای هر مانیتور با این API قابل ذخیره و بازگردانی نیست.
+     - **فایل خارجی حذف‌شده:** اگر فایل تصویر اصلی کاربر در دیسک حذف شده باشد، پیام شفاف خطا ثبت می‌شود و جایگزین جعلی اعمال نمی‌گردد.
+   - فایل‌های `.webp` به `.png` در `cache\wallpaper\desktop_wallpaper.png` تبدیل می‌شوند تا در تمام نسخه‌های ویندوز بدون خطای فرمت اعمال شوند.
    - در `MainWindow.xaml.cs` رویداد `SystemEvents.DisplaySettingsChanged` به `RefreshDisplayConfiguration()` متصل است و در `OnClosed` از آن جدا (Unsubscribe) می‌شود.
 
 6. **آیکون شناور و باز کردن عنوان (`OverlayService` + `OverlayWindow` + `ItemLauncher`):**

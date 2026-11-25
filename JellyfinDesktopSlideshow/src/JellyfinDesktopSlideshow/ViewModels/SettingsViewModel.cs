@@ -95,6 +95,8 @@ public sealed class SettingsViewModel : ViewModelBase
     public AsyncRelayCommand ClearCacheCommand { get; }
     public AsyncRelayCommand PruneCacheCommand { get; }
 
+    public Task PendingWallpaperOperationTask { get; private set; } = Task.CompletedTask;
+
     public event EventHandler? StateSynchronized;
 
     public SettingsViewModel(
@@ -287,6 +289,22 @@ public sealed class SettingsViewModel : ViewModelBase
             if (SetProperty(ref _applyToDesktopWallpaper, value))
             {
                 SaveSetting(s => s.ApplyToDesktopWallpaper = value);
+                if (!value)
+                {
+                    if (_wallpaperService.HasCapturedOriginalWallpaper)
+                    {
+                        PendingWallpaperOperationTask = RestoreWallpaperOnFeatureDisabledAsync();
+                    }
+                    else
+                    {
+                        StatusMessage = "اعمال خودکار والپیپر غیرفعال شد.";
+                    }
+                }
+                else if (!string.IsNullOrWhiteSpace(_slideshowService.CurrentState.CurrentImagePath))
+                {
+                    PendingWallpaperOperationTask = ApplyCurrentSlideOnFeatureEnabledAsync(
+                        _slideshowService.CurrentState.CurrentImagePath);
+                }
             }
         }
     }
@@ -301,7 +319,7 @@ public sealed class SettingsViewModel : ViewModelBase
                 SaveSetting(s => s.WallpaperFitMode = value);
                 if (ApplyToDesktopWallpaper && !string.IsNullOrWhiteSpace(_wallpaperService.LastAppliedWallpaperPath))
                 {
-                    _ = _wallpaperService.ReapplyCurrentWallpaperAsync();
+                    PendingWallpaperOperationTask = ReapplyCurrentWallpaperSafeAsync();
                 }
             }
         }
@@ -814,6 +832,66 @@ public sealed class SettingsViewModel : ViewModelBase
         RefreshCacheSummary();
         StatusMessage = "پاک‌سازی هوشمند کش بر اساس محدودیت حجم و عمر انجام شد.";
         return Task.CompletedTask;
+    }
+
+    private async Task RestoreWallpaperOnFeatureDisabledAsync()
+    {
+        try
+        {
+            var result = await _wallpaperService.RestoreOriginalWallpaperAsync();
+            if (result.Succeeded)
+            {
+                ErrorMessage = string.Empty;
+                StatusMessage = result.Message;
+            }
+            else
+            {
+                ErrorMessage = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("خطا هنگام بازگردانی والپیپر پس از غیرفعال‌شدن قابلیت.", ex);
+            ErrorMessage = "بازگردانی والپیپر قبلی با خطا مواجه شد.";
+        }
+    }
+
+    private async Task ApplyCurrentSlideOnFeatureEnabledAsync(string imagePath)
+    {
+        try
+        {
+            var result = await _wallpaperService.ApplyWallpaperAsync(imagePath);
+            if (result.Succeeded)
+            {
+                ErrorMessage = string.Empty;
+                StatusMessage = result.Message;
+            }
+            else
+            {
+                ErrorMessage = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("خطا هنگام اعمال والپیپر پس از فعال‌شدن قابلیت.", ex);
+            ErrorMessage = "اعمال والپیپر روی دسکتاپ با خطا مواجه شد.";
+        }
+    }
+
+    private async Task ReapplyCurrentWallpaperSafeAsync()
+    {
+        try
+        {
+            var result = await _wallpaperService.ReapplyCurrentWallpaperAsync();
+            if (!result.Succeeded)
+            {
+                ErrorMessage = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("خطا هنگام اعمال مجدد حالت چینش والپیپر.", ex);
+        }
     }
 
     private void ValidateAndSaveCustomUrlTemplate()

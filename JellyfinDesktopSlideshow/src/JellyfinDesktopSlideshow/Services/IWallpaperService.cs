@@ -11,6 +11,7 @@ public sealed record WallpaperApplyResult(
 public interface IWallpaperService
 {
     string? LastAppliedWallpaperPath { get; }
+    bool HasCapturedOriginalWallpaper { get; }
     Task<WallpaperApplyResult> ApplyWallpaperAsync(string imagePath, CancellationToken cancellationToken = default);
     Task<WallpaperApplyResult> ReapplyCurrentWallpaperAsync(CancellationToken cancellationToken = default);
     Task<WallpaperApplyResult> RestoreOriginalWallpaperAsync(CancellationToken cancellationToken = default);

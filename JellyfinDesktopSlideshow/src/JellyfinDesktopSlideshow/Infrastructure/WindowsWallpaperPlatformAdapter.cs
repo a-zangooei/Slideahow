@@ -16,16 +16,34 @@ public sealed class WindowsWallpaperPlatformAdapter : IWallpaperPlatformAdapter
     private const uint SpifSendChange = 0x02;
     private const uint MonitorInfoFPrimary = 0x00000001;
 
-    public string? GetCurrentDesktopWallpaper()
+    public DesktopWallpaperSnapshot GetCurrentDesktopWallpaperState()
     {
-        var buffer = new char[260];
-        if (!SystemParametersInfoGet(SpiGetDeskWallpaper, (uint)buffer.Length, buffer, 0))
+        string? wallpaperPath = null;
+        var buffer = new char[1024];
+        if (SystemParametersInfoGet(SpiGetDeskWallpaper, (uint)buffer.Length, buffer, 0))
         {
-            return null;
+            var rawPath = new string(buffer).TrimEnd('\0');
+            if (!string.IsNullOrWhiteSpace(rawPath))
+            {
+                wallpaperPath = rawPath;
+            }
         }
 
-        var path = new string(buffer).TrimEnd('\0');
-        return string.IsNullOrWhiteSpace(path) ? null : path;
+        string? wallpaperStyle = null;
+        string? tileWallpaper = null;
+        try
+        {
+            using var desktopKey = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop", writable: false);
+            wallpaperStyle = desktopKey?.GetValue("WallpaperStyle")?.ToString();
+            tileWallpaper = desktopKey?.GetValue("TileWallpaper")?.ToString();
+        }
+        catch
+        {
+            // Non-fatal: partial metadata capture should not block wallpaper state handling.
+        }
+
+        var backgroundMode = ReadWindowsBackgroundMode();
+        return new DesktopWallpaperSnapshot(wallpaperPath, wallpaperStyle, tileWallpaper, backgroundMode);
     }
 
     public string EnsureCompatibleImageFormat(string sourceImagePath, string stagingDirectory)
@@ -61,32 +79,21 @@ public sealed class WindowsWallpaperPlatformAdapter : IWallpaperPlatformAdapter
 
     public PlatformWallpaperResult SetDesktopWallpaper(string imagePath, WallpaperFitMode fitMode)
     {
-        try
-        {
-            ApplyFitStyleToRegistry(fitMode);
-        }
-        catch
-        {
-            // Non-fatal: still attempt SystemParametersInfoW.
-        }
-
-        var ok = SystemParametersInfoSet(
-            SpiSetDeskWallpaper,
-            0,
+        var (style, tile) = MapFitModeToRegistryValues(fitMode);
+        return ApplyWallpaperInternal(
             imagePath,
-            SpifUpdateIniFile | SpifSendChange);
+            style,
+            tile,
+            "تصویر پس‌زمینهٔ ویندوز با موفقیت تغییر کرد.");
+    }
 
-        if (ok)
-        {
-            return new PlatformWallpaperResult(true, 0, "تصویر پس‌زمینهٔ ویندوز با موفقیت تغییر کرد.");
-        }
-
-        var errorCode = Marshal.GetLastWin32Error();
-        var win32Message = new Win32Exception(errorCode).Message;
-        return new PlatformWallpaperResult(
-            false,
-            errorCode,
-            $"تغییر والپیپر ویندوز ناموفق بود (کد Win32: {errorCode} — {win32Message}).");
+    public PlatformWallpaperResult RestoreDesktopWallpaper(string imagePath, string? wallpaperStyle, string? tileWallpaper)
+    {
+        return ApplyWallpaperInternal(
+            imagePath,
+            wallpaperStyle,
+            tileWallpaper,
+            "والپیپر و تنظیمات چینش قبلی ویندوز با موفقیت بازگردانی شد.");
     }
 
     public IReadOnlyList<MonitorResolutionInfo> GetMonitors()
@@ -118,15 +125,42 @@ public sealed class WindowsWallpaperPlatformAdapter : IWallpaperPlatformAdapter
         return monitors;
     }
 
-    private static void ApplyFitStyleToRegistry(WallpaperFitMode fitMode)
+    private static PlatformWallpaperResult ApplyWallpaperInternal(
+        string imagePath,
+        string? wallpaperStyle,
+        string? tileWallpaper,
+        string successMessage)
     {
-        using var desktopKey = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop", writable: true);
-        if (desktopKey is null)
+        try
         {
-            return;
+            ApplyStyleValuesToRegistry(wallpaperStyle, tileWallpaper);
+        }
+        catch
+        {
+            // Non-fatal: still attempt SystemParametersInfoW.
         }
 
-        var (style, tile) = fitMode switch
+        var ok = SystemParametersInfoSet(
+            SpiSetDeskWallpaper,
+            0,
+            imagePath,
+            SpifUpdateIniFile | SpifSendChange);
+
+        if (ok)
+        {
+            return new PlatformWallpaperResult(true, 0, successMessage);
+        }
+
+        var errorCode = Marshal.GetLastWin32Error();
+        var win32Message = new Win32Exception(errorCode).Message;
+        return new PlatformWallpaperResult(
+            false,
+            errorCode,
+            $"تغییر والپیپر ویندوز ناموفق بود (کد Win32: {errorCode} — {win32Message}).");
+    }
+
+    private static (string Style, string Tile) MapFitModeToRegistryValues(WallpaperFitMode fitMode)
+        => fitMode switch
         {
             WallpaperFitMode.Fill => ("10", "0"),
             WallpaperFitMode.Fit => ("6", "0"),
@@ -136,8 +170,57 @@ public sealed class WindowsWallpaperPlatformAdapter : IWallpaperPlatformAdapter
             _ => ("10", "0")
         };
 
-        desktopKey.SetValue("WallpaperStyle", style, RegistryValueKind.String);
-        desktopKey.SetValue("TileWallpaper", tile, RegistryValueKind.String);
+    private static void ApplyStyleValuesToRegistry(string? wallpaperStyle, string? tileWallpaper)
+    {
+        if (wallpaperStyle is null && tileWallpaper is null)
+        {
+            return;
+        }
+
+        using var desktopKey = Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop", writable: true);
+        if (desktopKey is null)
+        {
+            return;
+        }
+
+        if (wallpaperStyle is not null)
+        {
+            desktopKey.SetValue("WallpaperStyle", wallpaperStyle, RegistryValueKind.String);
+        }
+
+        if (tileWallpaper is not null)
+        {
+            desktopKey.SetValue("TileWallpaper", tileWallpaper, RegistryValueKind.String);
+        }
+    }
+
+    private static WindowsBackgroundMode ReadWindowsBackgroundMode()
+    {
+        try
+        {
+            using var wallpapersKey = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers",
+                writable: false);
+            var rawValue = wallpapersKey?.GetValue("BackgroundType");
+            if (rawValue is null)
+            {
+                return WindowsBackgroundMode.Unknown;
+            }
+
+            var numericValue = Convert.ToInt32(rawValue);
+            return numericValue switch
+            {
+                0 => WindowsBackgroundMode.Picture,
+                1 => WindowsBackgroundMode.SolidColor,
+                2 => WindowsBackgroundMode.Slideshow,
+                3 => WindowsBackgroundMode.Spotlight,
+                _ => WindowsBackgroundMode.Unknown
+            };
+        }
+        catch
+        {
+            return WindowsBackgroundMode.Unknown;
+        }
     }
 
     private delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData);

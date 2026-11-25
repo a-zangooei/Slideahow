@@ -93,6 +93,74 @@ public sealed class SettingsViewModelTests : IDisposable
         Assert.False(reloaded.MinimizeToTrayOnClose);
     }
 
+    [Fact]
+    public async Task DisablingApplyToDesktopWallpaper_WhenOriginalCaptured_RestoresOriginalWallpaper()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var settingsPath = Path.Combine(_tempDir, "settings.json");
+        var logger = new NullLoggingService();
+        var settingsService = new SettingsService(logger, settingsPath);
+        settingsService.Load();
+
+        var wallpaper = new StubWallpaperService
+        {
+            HasCapturedOriginalWallpaper = true,
+            LastAppliedWallpaperPath = @"C:\temp\slide.png"
+        };
+
+        var vm = new SettingsViewModel(
+            new StubAuthService(),
+            new StubLibraryService(),
+            new CacheService(logger, Path.Combine(_tempDir, "cache")),
+            new SpySlideshowService(),
+            wallpaper,
+            new StubItemLauncher(),
+            new SpyOverlayService(),
+            new SpyStartupService(),
+            settingsService,
+            logger);
+
+        vm.ApplyToDesktopWallpaper = false;
+        await vm.PendingWallpaperOperationTask;
+
+        Assert.False(settingsService.Current.ApplyToDesktopWallpaper);
+        Assert.Equal(1, wallpaper.RestoreCalls);
+        Assert.Equal("Restored", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task DisablingApplyToDesktopWallpaper_WhenNoOriginalCaptured_DoesNotCallRestore()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var settingsPath = Path.Combine(_tempDir, "settings.json");
+        var logger = new NullLoggingService();
+        var settingsService = new SettingsService(logger, settingsPath);
+        settingsService.Load();
+
+        var wallpaper = new StubWallpaperService
+        {
+            HasCapturedOriginalWallpaper = false
+        };
+
+        var vm = new SettingsViewModel(
+            new StubAuthService(),
+            new StubLibraryService(),
+            new CacheService(logger, Path.Combine(_tempDir, "cache")),
+            new SpySlideshowService(),
+            wallpaper,
+            new StubItemLauncher(),
+            new SpyOverlayService(),
+            new SpyStartupService(),
+            settingsService,
+            logger);
+
+        vm.ApplyToDesktopWallpaper = false;
+        await vm.PendingWallpaperOperationTask;
+
+        Assert.False(settingsService.Current.ApplyToDesktopWallpaper);
+        Assert.Equal(0, wallpaper.RestoreCalls);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))
@@ -159,13 +227,20 @@ public sealed class SettingsViewModelTests : IDisposable
 
     private sealed class StubWallpaperService : IWallpaperService
     {
-        public string? LastAppliedWallpaperPath => null;
+        public string? LastAppliedWallpaperPath { get; set; }
+        public bool HasCapturedOriginalWallpaper { get; set; }
+        public int RestoreCalls { get; private set; }
         public Task<WallpaperApplyResult> ApplyWallpaperAsync(string imagePath, CancellationToken cancellationToken = default)
-            => Task.FromResult(new WallpaperApplyResult(true, "OK"));
+            => Task.FromResult(new WallpaperApplyResult(true, "OK", imagePath));
         public Task<WallpaperApplyResult> ReapplyCurrentWallpaperAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(new WallpaperApplyResult(true, "OK"));
         public Task<WallpaperApplyResult> RestoreOriginalWallpaperAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult(new WallpaperApplyResult(true, "OK"));
+        {
+            RestoreCalls++;
+            HasCapturedOriginalWallpaper = false;
+            LastAppliedWallpaperPath = null;
+            return Task.FromResult(new WallpaperApplyResult(true, "Restored"));
+        }
         public string GetMonitorsSummary() => "مانیتور 1 (اصلی): 1920×1080";
     }
 

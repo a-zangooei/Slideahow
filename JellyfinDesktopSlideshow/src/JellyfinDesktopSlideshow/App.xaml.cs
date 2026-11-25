@@ -237,7 +237,8 @@ public partial class App : Application
                 _slideshowService.Stop();
             }
 
-            if (_settingsService?.Current.RestoreWallpaperOnExit == true && _wallpaperService is not null)
+            if (_settingsService?.Current.RestoreWallpaperOnExit == true &&
+                _wallpaperService is { HasCapturedOriginalWallpaper: true })
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
                 await _wallpaperService.RestoreOriginalWallpaperAsync(cts.Token);
