@@ -14,6 +14,7 @@ public sealed class SettingsViewModel : ViewModelBase
     private readonly IWallpaperService _wallpaperService;
     private readonly IItemLauncher _itemLauncher;
     private readonly IOverlayService _overlayService;
+    private readonly IDesktopShortcutService _desktopShortcutService;
     private readonly IStartupService _startupService;
     private readonly ISettingsService _settingsService;
     private readonly ILoggingService _logger;
@@ -46,6 +47,7 @@ public sealed class SettingsViewModel : ViewModelBase
     private bool _restoreWallpaperOnExit;
 
     private bool _showOverlayIcon = true;
+    private bool _showDesktopShortcutIcon;
     private double _overlayLeft = 32;
     private double _overlayTop = 32;
     private double _overlaySize = 44;
@@ -87,6 +89,14 @@ public sealed class SettingsViewModel : ViewModelBase
         new(PlaybackTargetType.CustomUrlTemplate, "الگوی URL سفارشی")
     ];
 
+    public IReadOnlyList<KeyValuePair<DesktopIconMode, string>> DesktopIconModes { get; } =
+    [
+        new(DesktopIconMode.FloatingOverlay, "آیکون شناور روی صفحه"),
+        new(DesktopIconMode.DesktopShortcut, "آیکون استاندارد روی دسکتاپ (مانند سایر آیکون‌ها)"),
+        new(DesktopIconMode.Both, "هر دو حالت (آیکون شناور + آیکون دسکتاپ)"),
+        new(DesktopIconMode.Disabled, "غیرفعال")
+    ];
+
     public AsyncRelayCommand TestConnectionCommand { get; }
     public AsyncRelayCommand LogoutCommand { get; }
     public AsyncRelayCommand LoadLibrariesCommand { get; }
@@ -107,6 +117,7 @@ public sealed class SettingsViewModel : ViewModelBase
         IWallpaperService wallpaperService,
         IItemLauncher itemLauncher,
         IOverlayService overlayService,
+        IDesktopShortcutService desktopShortcutService,
         IStartupService startupService,
         ISettingsService settingsService,
         ILoggingService logger)
@@ -118,6 +129,7 @@ public sealed class SettingsViewModel : ViewModelBase
         _wallpaperService = wallpaperService;
         _itemLauncher = itemLauncher;
         _overlayService = overlayService;
+        _desktopShortcutService = desktopShortcutService;
         _startupService = startupService;
         _settingsService = settingsService;
         _logger = logger;
@@ -337,6 +349,88 @@ public sealed class SettingsViewModel : ViewModelBase
         }
     }
 
+    public DesktopIconMode SelectedDesktopIconMode
+    {
+        get => (_showOverlayIcon, _showDesktopShortcutIcon) switch
+        {
+            (true, true) => DesktopIconMode.Both,
+            (true, false) => DesktopIconMode.FloatingOverlay,
+            (false, true) => DesktopIconMode.DesktopShortcut,
+            _ => DesktopIconMode.Disabled
+        };
+        set
+        {
+            var (wantOverlay, wantShortcut) = value switch
+            {
+                DesktopIconMode.FloatingOverlay => (true, false),
+                DesktopIconMode.DesktopShortcut => (false, true),
+                DesktopIconMode.Both => (true, true),
+                _ => (false, false)
+            };
+
+            if (wantOverlay == _showOverlayIcon && wantShortcut == _showDesktopShortcutIcon)
+            {
+                return;
+            }
+
+            if (wantShortcut != _showDesktopShortcutIcon)
+            {
+                var applied = _desktopShortcutService.SetShortcutEnabled(wantShortcut);
+                if (!applied)
+                {
+                    ErrorMessage = "ایجاد یا حذف آیکون استاندارد دسکتاپ ناموفق بود.";
+                    _showDesktopShortcutIcon = _desktopShortcutService.IsShortcutPresent();
+                    OnPropertyChanged(nameof(ShowDesktopShortcutIcon));
+                    OnPropertyChanged(nameof(SelectedDesktopIconMode));
+                    return;
+                }
+
+                _showDesktopShortcutIcon = wantShortcut;
+                OnPropertyChanged(nameof(ShowDesktopShortcutIcon));
+            }
+
+            var overlayChanged = wantOverlay != _showOverlayIcon;
+            if (overlayChanged)
+            {
+                _showOverlayIcon = wantOverlay;
+                if (wantOverlay)
+                {
+                    _overlayService.Show();
+                }
+                else
+                {
+                    _overlayService.Hide();
+                }
+
+                OnPropertyChanged(nameof(ShowOverlayIcon));
+                OnPropertyChanged(nameof(IsFloatingOverlayEnabled));
+            }
+
+            SaveSetting(s =>
+            {
+                s.ShowOverlayIcon = _showOverlayIcon;
+                s.ShowDesktopShortcutIcon = _showDesktopShortcutIcon;
+            });
+
+            ErrorMessage = string.Empty;
+            StatusMessage = value switch
+            {
+                DesktopIconMode.FloatingOverlay => "حالت آیکون شناور روی صفحه فعال شد.",
+                DesktopIconMode.DesktopShortcut => "آیکون استاندارد روی دسکتاپ («باز کردن در Jellyfin») ایجاد شد.",
+                DesktopIconMode.Both => "هر دو حالت آیکون شناور و آیکون استاندارد دسکتاپ فعال شدند.",
+                _ => "نمایش آیکون باز کردن Jellyfin غیرفعال شد."
+            };
+
+            OnPropertyChanged(nameof(SelectedDesktopIconMode));
+            if (overlayChanged)
+            {
+                StateSynchronized?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
+
+    public bool IsFloatingOverlayEnabled => ShowOverlayIcon;
+
     public bool ShowOverlayIcon
     {
         get => _showOverlayIcon;
@@ -354,8 +448,41 @@ public sealed class SettingsViewModel : ViewModelBase
                     _overlayService.Hide();
                 }
 
+                OnPropertyChanged(nameof(IsFloatingOverlayEnabled));
+                OnPropertyChanged(nameof(SelectedDesktopIconMode));
                 StateSynchronized?.Invoke(this, EventArgs.Empty);
             }
+        }
+    }
+
+    public bool ShowDesktopShortcutIcon
+    {
+        get => _showDesktopShortcutIcon;
+        set
+        {
+            if (_showDesktopShortcutIcon == value)
+            {
+                return;
+            }
+
+            var applied = _desktopShortcutService.SetShortcutEnabled(value);
+            if (!applied)
+            {
+                ErrorMessage = "ایجاد یا حذف آیکون استاندارد دسکتاپ ناموفق بود.";
+                _showDesktopShortcutIcon = _desktopShortcutService.IsShortcutPresent();
+                OnPropertyChanged(nameof(ShowDesktopShortcutIcon));
+                OnPropertyChanged(nameof(SelectedDesktopIconMode));
+                return;
+            }
+
+            _showDesktopShortcutIcon = value;
+            SaveSetting(s => s.ShowDesktopShortcutIcon = value);
+            ErrorMessage = string.Empty;
+            StatusMessage = value
+                ? "آیکون استاندارد روی دسکتاپ («باز کردن در Jellyfin») ایجاد شد."
+                : "آیکون استاندارد از دسکتاپ حذف شد.";
+            OnPropertyChanged(nameof(ShowDesktopShortcutIcon));
+            OnPropertyChanged(nameof(SelectedDesktopIconMode));
         }
     }
 
@@ -590,6 +717,7 @@ public sealed class SettingsViewModel : ViewModelBase
         _selectedWallpaperFitMode = s.WallpaperFitMode;
         _restoreWallpaperOnExit = s.RestoreWallpaperOnExit;
         _showOverlayIcon = s.ShowOverlayIcon;
+        _showDesktopShortcutIcon = s.ShowDesktopShortcutIcon;
         _overlayLeft = s.OverlayLeft;
         _overlayTop = s.OverlayTop;
         _overlaySize = s.OverlaySize;

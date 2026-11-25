@@ -42,6 +42,7 @@ public sealed class AppSettings
     public string? FallbackImagePath { get; set; }
 
     public bool ShowOverlayIcon { get; set; } = true;
+    public bool ShowDesktopShortcutIcon { get; set; } = false;
     public double OverlayLeft { get; set; } = 32;
     public double OverlayTop { get; set; } = 32;
     public double OverlaySize { get; set; } = 44;
@@ -60,4 +61,12 @@ public enum WallpaperFitMode
     Stretch = 2,
     Center = 3,
     Span = 4
+}
+
+public enum DesktopIconMode
+{
+    FloatingOverlay = 0,
+    DesktopShortcut = 1,
+    Both = 2,
+    Disabled = 3
 }

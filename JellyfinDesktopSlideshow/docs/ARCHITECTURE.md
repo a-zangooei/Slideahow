@@ -66,9 +66,11 @@ JellyfinDesktopSlideshow/
    - فایل‌های `.webp` به `.png` در `cache\wallpaper\desktop_wallpaper.png` تبدیل می‌شوند تا در تمام نسخه‌های ویندوز بدون خطای فرمت اعمال شوند.
    - در `MainWindow.xaml.cs` رویداد `SystemEvents.DisplaySettingsChanged` به `RefreshDisplayConfiguration()` متصل است و در `OnClosed` از آن جدا (Unsubscribe) می‌شود.
 
-6. **آیکون شناور و باز کردن عنوان (`OverlayService` + `OverlayWindow` + `ItemLauncher`):**
-   - `OverlayWindow` پنجره‌ای شفاف، بدون قاب، خارج از Taskbar و دارای پرچم‌های Win32 `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` است.
-   - مختصات X/Y در `OverlayService.RefreshFromSettings()` در محدودهٔ `SystemParameters.VirtualScreen*` محدود (Clamp) می‌شود تا با قطع‌شدن یک مانیتور، آیکون خارج از صفحه گیر نیفتد.
+6. **آیکون دسکتاپ (شناور و استاندارد) و باز کردن عنوان (`OverlayService` + `DesktopShortcutService` + `ItemLauncher`):**
+   - **آیکون شناور (`OverlayWindow`):** پنجره‌ای شفاف، بدون قاب، خارج از Taskbar و دارای پرچم‌های Win32 `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` است؛ مختصات X/Y در `OverlayService.RefreshFromSettings()` در محدودهٔ `SystemParameters.VirtualScreen*` محدود (Clamp) می‌شود.
+   - **آیکون استاندارد روی دسکتاپ (`DesktopShortcutService` + `WindowsDesktopShortcutAdapter`):** با استفاده از COM (`IShellLinkW` / `IPersistFile`) یک میان‌بُر واقعی با نام `باز کردن در Jellyfin.lnk` و آیکون چندسایزی `.ico` در پوشهٔ `DesktopDirectory` کاربر می‌سازد تا دقیقاً مانند سایر آیکون‌های ویندوز قابل جابه‌جایی و کلیک باشد.
+   - **ارتباط بین‌پردازه‌ای (`--open-current`):** دابل‌کلیک روی میان‌بُر دسکتاپ برنامه را با آرگومان `--open-current` صدا می‌زند؛ اگر نمونهٔ اصلی در حال اجرا باشد از طریق `EventWaitHandle` (`Local\JellyfinDesktopSlideshow_OpenCurrent_v1`) عنوان فعلی را باز می‌کند و در غیر این صورت نمونهٔ اصلی را راه‌اندازی کرده و پس از بارگذاری عنوان را باز می‌نماید.
+   - در تب ۴ تنظیمات (`DesktopIconMode`) کاربر می‌تواند بین «فقط آیکون شناور»، «فقط آیکون استاندارد دسکتاپ»، «هر دو» یا «غیرفعال» انتخاب کند.
    - `ItemLauncher` سه حالت دارد:
      - `DefaultBrowser`: ساخت لینک `{baseUrl}/web/index.html#!/details?id={itemId}&serverId={serverId}`
      - `JellyfinDesktopClient`: بررسی نصب کلاینت در مسیرها/رجیستری، یافتن نشست با `SupportsRemoteControl == true` در `GET /Sessions` و ارسال `POST /Sessions/{sessionId}/Viewing`

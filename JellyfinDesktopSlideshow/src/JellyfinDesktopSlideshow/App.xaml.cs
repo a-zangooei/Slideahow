@@ -10,17 +10,22 @@ namespace JellyfinDesktopSlideshow;
 
 public partial class App : Application
 {
+    private const string OpenCurrentSignalName = @"Local\JellyfinDesktopSlideshow_OpenCurrent_v1";
+
     private HttpClient? _httpClient;
     private ILoggingService? _logger;
     private ISettingsService? _settingsService;
     private ISlideshowService? _slideshowService;
     private IWallpaperService? _wallpaperService;
     private IOverlayService? _overlayService;
+    private IItemLauncher? _itemLauncher;
     private ITrayService? _trayService;
     private MainViewModel? _mainViewModel;
     private SettingsViewModel? _settingsViewModel;
     private MainWindow? _mainWindow;
     private SettingsWindow? _settingsWindow;
+    private EventWaitHandle? _openCurrentSignal;
+    private RegisteredWaitHandle? _openCurrentWaitRegistration;
     private bool _isShuttingDown;
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -28,9 +33,19 @@ public partial class App : Application
         base.OnStartup(e);
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+        var openCurrentRequested = e.Args.Any(a =>
+            string.Equals(a, DesktopShortcutService.OpenCurrentArgument, StringComparison.OrdinalIgnoreCase));
+
+        if (openCurrentRequested && TrySignalRunningInstanceToOpenCurrent())
+        {
+            Shutdown(0);
+            return;
+        }
+
         _logger = new LoggingService();
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
+        RegisterOpenCurrentSignalListener();
 
         _httpClient = new HttpClient
         {
@@ -57,8 +72,12 @@ public partial class App : Application
 
         var externalLauncher = new WindowsExternalLauncher(_logger);
         var itemLauncher = new ItemLauncher(jellyfinClient, authService, settingsService, externalLauncher, _logger);
+        _itemLauncher = itemLauncher;
         var overlayViewModel = new OverlayViewModel(slideshowService, itemLauncher, settingsService, _logger);
         _overlayService = new OverlayService(overlayViewModel, settingsService, itemLauncher, _logger);
+
+        var desktopShortcutService = new DesktopShortcutService(new WindowsDesktopShortcutAdapter(), _logger);
+        desktopShortcutService.SetShortcutEnabled(loadedSettings.ShowDesktopShortcutIcon);
 
         var startupService = new StartupService(new WindowsStartupRegistryAdapter(), _logger);
         _trayService = new TrayService(_logger);
@@ -83,6 +102,7 @@ public partial class App : Application
             wallpaperService,
             itemLauncher,
             _overlayService,
+            desktopShortcutService,
             startupService,
             settingsService,
             _logger);
@@ -140,9 +160,14 @@ public partial class App : Application
 
         await _mainViewModel.InitializeAsync();
 
-        if (!startMinimized)
+        if (!startMinimized && !openCurrentRequested)
         {
             _mainWindow.Show();
+        }
+
+        if (openCurrentRequested)
+        {
+            await HandleExternalOpenCurrentRequestAsync();
         }
     }
 
@@ -250,12 +275,124 @@ public partial class App : Application
         }
         finally
         {
+            _openCurrentWaitRegistration?.Unregister(null);
+            _openCurrentWaitRegistration = null;
+            _openCurrentSignal?.Dispose();
+            _openCurrentSignal = null;
             _settingsWindow?.Close();
             _overlayService?.Close();
             _trayService?.Dispose();
             _mainWindow?.ForceClose();
             _httpClient?.Dispose();
             Shutdown();
+        }
+    }
+
+    private static bool TrySignalRunningInstanceToOpenCurrent()
+    {
+        try
+        {
+            if (EventWaitHandle.TryOpenExisting(OpenCurrentSignalName, out var existingSignal))
+            {
+                using (existingSignal)
+                {
+                    existingSignal.Set();
+                }
+
+                return true;
+            }
+        }
+        catch
+        {
+            // Fall back to starting a primary instance if IPC event cannot be opened.
+        }
+
+        return false;
+    }
+
+    private void RegisterOpenCurrentSignalListener()
+    {
+        try
+        {
+            _openCurrentSignal = new EventWaitHandle(false, EventResetMode.AutoReset, OpenCurrentSignalName);
+            _openCurrentWaitRegistration = ThreadPool.RegisterWaitForSingleObject(
+                _openCurrentSignal,
+                (_, timedOut) =>
+                {
+                    if (!timedOut && !_isShuttingDown)
+                    {
+                        _ = Dispatcher.InvokeAsync(HandleExternalOpenCurrentRequestSafeAsync);
+                    }
+                },
+                null,
+                Timeout.Infinite,
+                executeOnlyOnce: false);
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warning($"ثبت شنوندهٔ میان‌بُر دسکتاپ با خطا مواجه شد: {ex.Message}");
+        }
+    }
+
+    private async Task HandleExternalOpenCurrentRequestSafeAsync()
+    {
+        try
+        {
+            await HandleExternalOpenCurrentRequestAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("خطای غیرمنتظره هنگام اجرای فرمان باز کردن از آیکون دسکتاپ.", ex);
+        }
+    }
+
+    private async Task HandleExternalOpenCurrentRequestAsync()
+    {
+        if (_isShuttingDown || _mainViewModel is null || _slideshowService is null || _itemLauncher is null)
+        {
+            return;
+        }
+
+        var item = _slideshowService.CurrentState.CurrentItem ?? _mainViewModel.SelectedMediaItem;
+        if (item is null)
+        {
+            ShowMainWindow();
+            MessageBox.Show(
+                "هنوز عنوانی در حال نمایش نیست. لطفاً ابتدا وارد حساب Jellyfin شوید یا اسلایدشو را شروع کنید.",
+                "Jellyfin Desktop Slideshow",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var result = await _itemLauncher.OpenItemAsync(item);
+        if (result.Succeeded)
+        {
+            return;
+        }
+
+        _logger?.Warning($"باز کردن عنوان از آیکون دسکتاپ ناموفق بود: {result.Message}");
+
+        if (result.CanFallbackToBrowser && !string.IsNullOrWhiteSpace(result.FallbackBrowserUrl))
+        {
+            var answer = MessageBox.Show(
+                $"{result.Message}\n\nآیا می‌خواهید این عنوان در مرورگر پیش‌فرض باز شود؟",
+                "Jellyfin Desktop Slideshow",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information);
+
+            if (answer == MessageBoxResult.Yes)
+            {
+                _itemLauncher.OpenValidatedBrowserUrl(result.FallbackBrowserUrl);
+            }
+        }
+        else
+        {
+            MessageBox.Show(
+                result.Message,
+                "Jellyfin Desktop Slideshow",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
         }
     }
 

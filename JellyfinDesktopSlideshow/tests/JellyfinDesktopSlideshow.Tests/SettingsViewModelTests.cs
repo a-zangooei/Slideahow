@@ -22,6 +22,7 @@ public sealed class SettingsViewModelTests : IDisposable
 
         var slideshow = new SpySlideshowService();
         var overlay = new SpyOverlayService();
+        var desktopShortcut = new SpyDesktopShortcutService();
         var startup = new SpyStartupService();
         var launcher = new StubItemLauncher();
 
@@ -33,6 +34,7 @@ public sealed class SettingsViewModelTests : IDisposable
             new StubWallpaperService(),
             launcher,
             overlay,
+            desktopShortcut,
             startup,
             settingsService,
             logger);
@@ -116,6 +118,7 @@ public sealed class SettingsViewModelTests : IDisposable
             wallpaper,
             new StubItemLauncher(),
             new SpyOverlayService(),
+            new SpyDesktopShortcutService(),
             new SpyStartupService(),
             settingsService,
             logger);
@@ -150,6 +153,7 @@ public sealed class SettingsViewModelTests : IDisposable
             wallpaper,
             new StubItemLauncher(),
             new SpyOverlayService(),
+            new SpyDesktopShortcutService(),
             new SpyStartupService(),
             settingsService,
             logger);
@@ -159,6 +163,58 @@ public sealed class SettingsViewModelTests : IDisposable
 
         Assert.False(settingsService.Current.ApplyToDesktopWallpaper);
         Assert.Equal(0, wallpaper.RestoreCalls);
+    }
+
+    [Fact]
+    public void SelectedDesktopIconMode_SwitchesBetweenFloatingDesktopShortcutBothAndDisabled()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var settingsPath = Path.Combine(_tempDir, "settings.json");
+        var logger = new NullLoggingService();
+        var settingsService = new SettingsService(logger, settingsPath);
+        settingsService.Load();
+
+        var overlay = new SpyOverlayService();
+        var desktopShortcut = new SpyDesktopShortcutService();
+
+        var vm = new SettingsViewModel(
+            new StubAuthService(),
+            new StubLibraryService(),
+            new CacheService(logger, Path.Combine(_tempDir, "cache")),
+            new SpySlideshowService(),
+            new StubWallpaperService(),
+            new StubItemLauncher(),
+            overlay,
+            desktopShortcut,
+            new SpyStartupService(),
+            settingsService,
+            logger);
+
+        Assert.Equal(DesktopIconMode.FloatingOverlay, vm.SelectedDesktopIconMode);
+        Assert.True(vm.IsFloatingOverlayEnabled);
+
+        vm.SelectedDesktopIconMode = DesktopIconMode.DesktopShortcut;
+        Assert.False(vm.ShowOverlayIcon);
+        Assert.False(overlay.IsVisible);
+        Assert.False(vm.IsFloatingOverlayEnabled);
+        Assert.True(vm.ShowDesktopShortcutIcon);
+        Assert.True(desktopShortcut.IsPresent);
+
+        vm.SelectedDesktopIconMode = DesktopIconMode.Both;
+        Assert.True(vm.ShowOverlayIcon);
+        Assert.True(overlay.IsVisible);
+        Assert.True(vm.ShowDesktopShortcutIcon);
+        Assert.True(desktopShortcut.IsPresent);
+
+        var reloaded = new SettingsService(logger, settingsPath).Load();
+        Assert.True(reloaded.ShowOverlayIcon);
+        Assert.True(reloaded.ShowDesktopShortcutIcon);
+
+        vm.SelectedDesktopIconMode = DesktopIconMode.Disabled;
+        Assert.False(vm.ShowOverlayIcon);
+        Assert.False(overlay.IsVisible);
+        Assert.False(vm.ShowDesktopShortcutIcon);
+        Assert.False(desktopShortcut.IsPresent);
     }
 
     public void Dispose()
@@ -193,6 +249,18 @@ public sealed class SettingsViewModelTests : IDisposable
         public void Hide() => IsVisible = false;
         public void RefreshFromSettings() => RefreshCalls++;
         public void Close() => IsVisible = false;
+    }
+
+    private sealed class SpyDesktopShortcutService : IDesktopShortcutService
+    {
+        public bool IsPresent { get; private set; }
+        public string ShortcutFilePath => @"C:\Desktop\باز کردن در Jellyfin.lnk";
+        public bool IsShortcutPresent() => IsPresent;
+        public bool SetShortcutEnabled(bool enabled)
+        {
+            IsPresent = enabled;
+            return true;
+        }
     }
 
     private sealed class SpyStartupService : IStartupService

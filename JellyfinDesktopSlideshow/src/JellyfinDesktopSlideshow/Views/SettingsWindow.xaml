@@ -174,17 +174,30 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ۴. ظاهر و جایگاه آیکون -->
-            <TabItem Header="۴. آیکون شناور دسکتاپ">
+            <!-- ۴. آیکون دسکتاپ -->
+            <TabItem Header="۴. آیکون دسکتاپ">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
                     <StackPanel MaxWidth="520" HorizontalAlignment="Left">
-                        <TextBlock Text="ظاهر و جایگاه آیکون قابل‌کلیک روی دسکتاپ" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
+                        <TextBlock Text="حالت نمایش آیکون قابل‌کلیک برای باز کردن Jellyfin" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
 
-                        <CheckBox Content="نمایش آیکون شناور روی دسکتاپ"
-                                  IsChecked="{Binding ShowOverlayIcon}"
-                                  Margin="0,0,0,14" />
+                        <TextBlock Text="روش نمایش روی دسکتاپ:" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <ComboBox ItemsSource="{Binding DesktopIconModes}"
+                                  SelectedValue="{Binding SelectedDesktopIconMode}"
+                                  SelectedValuePath="Key"
+                                  DisplayMemberPath="Value"
+                                  Padding="8,5"
+                                  Margin="0,0,0,10" />
 
-                        <Grid>
+                        <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,14">
+                            <TextBlock Text="در حالت «آیکون استاندارد روی دسکتاپ»، یک میان‌بُر واقعی با نام «باز کردن در Jellyfin» کنار سایر آیکون‌های دسکتاپ ساخته می‌شود که می‌توانید آن را مانند بقیهٔ آیکون‌ها جابه‌جا کنید و با دابل‌کلیک، فیلم یا سریال در حال نمایش را باز نمایید."
+                                       Foreground="#475569"
+                                       FontSize="12"
+                                       TextWrapping="Wrap" />
+                        </Border>
+
+                        <TextBlock Text="تنظیمات ظاهر و جایگاه آیکون شناور:" FontWeight="SemiBold" Margin="0,0,0,8" />
+
+                        <Grid IsEnabled="{Binding IsFloatingOverlayEnabled}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="170" />
                                 <ColumnDefinition Width="120" />
@@ -212,7 +225,7 @@
                             <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding OverlayOpacity, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
                         </Grid>
 
-                        <TextBlock Text="تغییرات بلافاصله روی آیکون دسکتاپ اعمال و در محدودهٔ نمایشگرهای فعال تنظیم می‌شوند."
+                        <TextBlock Text="تغییرات بلافاصله اعمال می‌شوند و در حالت شناور، مختصات در محدودهٔ نمایشگرهای فعال تنظیم می‌گردد."
                                    Foreground="#64748B"
                                    FontSize="12"
                                    TextWrapping="Wrap"
