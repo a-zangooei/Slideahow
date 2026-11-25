@@ -19,7 +19,7 @@
       <Directory Id="INSTALLFOLDER" Name="Jellyfin Desktop Slideshow" />
     </StandardDirectory>
 
-    <StandardDirectory Id="ProgramMenuFolder">
+    <StandardDirectory Id="CommonProgramsFolder">
       <Directory Id="ApplicationProgramsFolder" Name="Jellyfin Desktop Slideshow" />
     </StandardDirectory>
   </Fragment>
@@ -40,7 +40,7 @@
       <RemoveFolder Id="CleanUpApplicationProgramsFolder"
                     Directory="ApplicationProgramsFolder"
                     On="uninstall" />
-      <RegistryValue Root="HKMU"
+      <RegistryValue Root="HKLM"
                      Key="Software\JellyfinDesktopSlideshow"
                      Name="installed"
                      Type="integer"
