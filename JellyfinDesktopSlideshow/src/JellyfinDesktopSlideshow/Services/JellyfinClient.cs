@@ -257,34 +257,110 @@ public sealed class JellyfinClient : IJellyfinClient
         {
             foreach (var raw in dto.Items)
             {
-                if (string.IsNullOrWhiteSpace(raw.Id) || string.IsNullOrWhiteSpace(raw.Name))
+                var mapped = TryMapMediaItem(serverUri, raw);
+                if (mapped is not null)
                 {
-                    continue;
+                    items.Add(mapped);
                 }
-
-                var tags = raw.BackdropImageTags ?? [];
-                string? backdropUrl = null;
-                if (tags.Count > 0)
-                {
-                    backdropUrl = new Uri(
-                        serverUri,
-                        $"Items/{Uri.EscapeDataString(raw.Id)}/Images/Backdrop/0?tag={Uri.EscapeDataString(tags[0])}")
-                        .ToString();
-                }
-
-                items.Add(new MediaItem
-                {
-                    Id = raw.Id,
-                    Name = raw.Name,
-                    Type = raw.Type,
-                    ProductionYear = raw.ProductionYear,
-                    BackdropImageUrl = backdropUrl,
-                    BackdropImageTags = tags
-                });
             }
         }
 
         return (items, dto.TotalRecordCount);
+    }
+
+    public async Task<IReadOnlyList<MediaItem>> GetCollectionItemsAsync(
+        Uri serverUri,
+        string? userId,
+        string accessToken,
+        string deviceId,
+        string collectionId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(collectionId);
+
+        const int pageSize = 200;
+        var startIndex = 0;
+        var uniqueMembers = new Dictionary<string, MediaItem>(StringComparer.OrdinalIgnoreCase);
+
+        while (true)
+        {
+            var queryParts = new List<string>
+            {
+                $"ParentId={Uri.EscapeDataString(collectionId)}",
+                "Recursive=true",
+                "CollapseBoxSetItems=false",
+                "Fields=ProductionYear,BackdropImageTags",
+                $"StartIndex={startIndex}",
+                $"Limit={pageSize}"
+            };
+
+            var itemsRoute = string.IsNullOrWhiteSpace(userId)
+                ? $"Items?{string.Join("&", queryParts)}"
+                : $"Users/{Uri.EscapeDataString(userId)}/Items?{string.Join("&", queryParts)}";
+            var requestUri = new Uri(serverUri, itemsRoute);
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+            ApplyMediaBrowserAuthorization(request, deviceId, accessToken);
+
+            using var response = await SendAsync(request, cancellationToken);
+            EnsureSuccess(response, "دریافت فهرست آثار عضو کالکشن ناموفق بود.");
+
+            var dto = await DeserializeAsync<BaseItemQueryResultDto>(response, cancellationToken);
+            var batchCount = dto.Items?.Count ?? 0;
+
+            if (dto.Items is not null)
+            {
+                foreach (var raw in dto.Items)
+                {
+                    var mapped = TryMapMediaItem(serverUri, raw);
+                    if (mapped is null ||
+                        string.Equals(mapped.Id, collectionId, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(mapped.Type, "Season", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(mapped.Type, "Episode", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    uniqueMembers.TryAdd(mapped.Id, mapped);
+                }
+            }
+
+            startIndex += batchCount;
+            if (batchCount == 0 || startIndex >= dto.TotalRecordCount)
+            {
+                break;
+            }
+        }
+
+        return uniqueMembers.Values.ToList();
+    }
+
+    private static MediaItem? TryMapMediaItem(Uri serverUri, BaseItemDto raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw.Id) || string.IsNullOrWhiteSpace(raw.Name))
+        {
+            return null;
+        }
+
+        var tags = raw.BackdropImageTags ?? [];
+        string? backdropUrl = null;
+        if (tags.Count > 0)
+        {
+            backdropUrl = new Uri(
+                serverUri,
+                $"Items/{Uri.EscapeDataString(raw.Id)}/Images/Backdrop/0?tag={Uri.EscapeDataString(tags[0])}")
+                .ToString();
+        }
+
+        return new MediaItem
+        {
+            Id = raw.Id,
+            Name = raw.Name,
+            Type = raw.Type,
+            ProductionYear = raw.ProductionYear,
+            BackdropImageUrl = backdropUrl,
+            BackdropImageTags = tags
+        };
     }
 
     public async Task<(byte[] Bytes, string? ContentType)> DownloadBackdropImageAsync(

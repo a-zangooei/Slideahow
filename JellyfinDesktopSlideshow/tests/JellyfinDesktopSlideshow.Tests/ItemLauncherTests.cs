@@ -266,6 +266,15 @@ public sealed class ItemLauncherTests
             CancellationToken cancellationToken = default)
             => Task.FromResult<(IReadOnlyList<MediaItem> Items, int TotalRecordCount)>(([], 0));
 
+        public Task<IReadOnlyList<MediaItem>> GetCollectionItemsAsync(
+            Uri serverUri,
+            string? userId,
+            string accessToken,
+            string deviceId,
+            string collectionId,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<MediaItem>>([]);
+
         public Task<(byte[] Bytes, string? ContentType)> DownloadBackdropImageAsync(
             Uri serverUri,
             string itemId,

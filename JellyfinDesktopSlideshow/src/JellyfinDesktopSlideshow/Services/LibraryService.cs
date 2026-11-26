@@ -50,6 +50,9 @@ public sealed class LibraryService : ILibraryService
     {
         var session = EnsureAuthenticatedSession();
         var types = includeItemTypes.Count > 0 ? includeItemTypes : ["Movie", "Series"];
+        var effectiveTypes = types.Any(t => string.Equals(t, "BoxSet", StringComparison.OrdinalIgnoreCase))
+            ? types
+            : [.. types, "BoxSet"];
         var parentIds = libraryIds.Count > 0 ? libraryIds : [string.Empty];
 
         var uniqueItems = new Dictionary<string, MediaItem>(StringComparer.OrdinalIgnoreCase);
@@ -65,7 +68,7 @@ public sealed class LibraryService : ILibraryService
                     session.AccessToken!,
                     _settingsService.Current.DeviceId,
                     string.IsNullOrWhiteSpace(parentId) ? null : parentId,
-                    types,
+                    effectiveTypes,
                     startIndex,
                     PageSize,
                     cancellationToken);
@@ -83,9 +86,96 @@ public sealed class LibraryService : ILibraryService
             }
         }
 
-        return uniqueItems.Values
+        var resolvedItems = new List<MediaItem>(uniqueItems.Count);
+        foreach (var item in uniqueItems.Values)
+        {
+            if (!item.IsCollection)
+            {
+                resolvedItems.Add(item);
+                continue;
+            }
+
+            var visitedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { item.Id };
+            var members = await TryResolveCollectionMembersAsync(session, item.Id, visitedIds, depth: 0, cancellationToken);
+            resolvedItems.Add(members.Count > 0
+                ? new MediaItem
+                {
+                    Id = item.Id,
+                    Name = item.Name,
+                    Type = item.Type,
+                    ProductionYear = item.ProductionYear,
+                    BackdropImageUrl = item.BackdropImageUrl,
+                    BackdropImageTags = item.BackdropImageTags,
+                    CollectionMembers = members
+                }
+                : item);
+        }
+
+        return resolvedItems
             .OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
+    }
+
+    private async Task<IReadOnlyList<MediaItem>> TryResolveCollectionMembersAsync(
+        ConnectionSessionState session,
+        string collectionId,
+        HashSet<string> visitedIds,
+        int depth,
+        CancellationToken cancellationToken)
+    {
+        const int maxCollectionDepth = 3;
+        if (depth >= maxCollectionDepth)
+        {
+            return [];
+        }
+
+        IReadOnlyList<MediaItem> rawMembers;
+        try
+        {
+            rawMembers = await _client.GetCollectionItemsAsync(
+                session.ServerUri!,
+                session.UserId,
+                session.AccessToken!,
+                _settingsService.Current.DeviceId,
+                collectionId,
+                cancellationToken);
+        }
+        catch (JellyfinApiException ex) when (ex.ErrorKind is not JellyfinErrorKind.Unauthorized and not JellyfinErrorKind.Forbidden)
+        {
+            return [];
+        }
+
+        var members = new List<MediaItem>(rawMembers.Count);
+        foreach (var member in rawMembers)
+        {
+            if (!visitedIds.Add(member.Id))
+            {
+                continue;
+            }
+
+            if (member.IsCollection)
+            {
+                var nestedMembers = await TryResolveCollectionMembersAsync(session, member.Id, visitedIds, depth + 1, cancellationToken);
+                members.Add(nestedMembers.Count > 0
+                    ? new MediaItem
+                    {
+                        Id = member.Id,
+                        Name = member.Name,
+                        Type = member.Type,
+                        ProductionYear = member.ProductionYear,
+                        BackdropImageUrl = member.BackdropImageUrl,
+                        BackdropImageTags = member.BackdropImageTags,
+                        CollectionMembers = nestedMembers
+                    }
+                    : member);
+            }
+            else
+            {
+                members.Add(member);
+            }
+        }
+
+        return members;
     }
 
     private ConnectionSessionState EnsureAuthenticatedSession()

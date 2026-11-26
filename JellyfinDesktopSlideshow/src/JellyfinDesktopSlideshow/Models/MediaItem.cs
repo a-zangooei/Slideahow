@@ -8,6 +8,11 @@ public sealed class MediaItem
     public int? ProductionYear { get; init; }
     public string? BackdropImageUrl { get; init; }
     public IReadOnlyList<string> BackdropImageTags { get; init; } = [];
+    public IReadOnlyList<MediaItem> CollectionMembers { get; init; } = [];
 
-    public bool HasBackdrop => BackdropImageTags.Count > 0;
+    public bool IsCollection => string.Equals(Type, "BoxSet", StringComparison.OrdinalIgnoreCase);
+
+    public bool HasBackdrop =>
+        BackdropImageTags.Count > 0 ||
+        (IsCollection && CollectionMembers.Any(member => member.HasBackdrop));
 }

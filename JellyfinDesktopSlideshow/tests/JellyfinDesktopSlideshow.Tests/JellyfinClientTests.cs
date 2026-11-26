@@ -133,4 +133,53 @@ public sealed class JellyfinClientTests
         Assert.Equal("/Items", handler.Requests[1].RequestUri!.AbsolutePath);
         Assert.DoesNotContain("api-key-1", handler.Requests[1].RequestUri!.Query, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task GetCollectionItemsAsync_UsesCollapseBoxSetItemsFalseAndFiltersSelfOrEpisodes()
+    {
+        var handler = new StubHttpMessageHandler(req =>
+        {
+            var query = req.RequestUri!.Query;
+            Assert.Contains("ParentId=col-1", query, StringComparison.Ordinal);
+            Assert.Contains("Recursive=true", query, StringComparison.Ordinal);
+            Assert.Contains("CollapseBoxSetItems=false", query, StringComparison.Ordinal);
+
+            return StubHttpMessageHandler.JsonResponse(
+                HttpStatusCode.OK,
+                """
+                {
+                  "Items": [
+                    {"Id":"col-1","Name":"Self Collection","Type":"BoxSet","BackdropImageTags":["t-col"]},
+                    {"Id":"m-1","Name":"Movie 1","Type":"Movie","BackdropImageTags":["t-m1"]},
+                    {"Id":"m-1","Name":"Movie 1 Duplicate","Type":"Movie","BackdropImageTags":["t-m1"]},
+                    {"Id":"ep-1","Name":"Episode 1","Type":"Episode","BackdropImageTags":["t-ep"]},
+                    {"Id":"s-1","Name":"Series 1","Type":"Series","BackdropImageTags":["t-s1"]}
+                  ],
+                  "TotalRecordCount": 5
+                }
+                """);
+        });
+
+        var client = new JellyfinClient(new HttpClient(handler), new NullLoggingService());
+
+        var userMembers = await client.GetCollectionItemsAsync(
+            new Uri("http://localhost:8096/"),
+            "u-1",
+            "user-tok",
+            "dev-1",
+            "col-1");
+
+        var apiKeyMembers = await client.GetCollectionItemsAsync(
+            new Uri("http://localhost:8096/"),
+            null,
+            "api-key-1",
+            "dev-1",
+            "col-1");
+
+        Assert.Equal("/Users/u-1/Items", handler.Requests[0].RequestUri!.AbsolutePath);
+        Assert.Equal("/Items", handler.Requests[1].RequestUri!.AbsolutePath);
+        Assert.Equal(2, userMembers.Count);
+        Assert.Equal(["m-1", "s-1"], userMembers.Select(m => m.Id).ToArray());
+        Assert.Equal(2, apiKeyMembers.Count);
+    }
 }

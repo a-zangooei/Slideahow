@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.IO;
+using System.Security.Cryptography;
 using JellyfinDesktopSlideshow.Infrastructure;
 using JellyfinDesktopSlideshow.Models;
 
@@ -7,12 +10,15 @@ public sealed class ImageService : IImageService
 {
     private const int DefaultMaxWidth = 1920;
     private const int DefaultQuality = 92;
+    private const int MaxCollectionNestingDepth = 3;
 
     private readonly IJellyfinClient _client;
     private readonly IAuthenticationService _authService;
     private readonly ICacheService _cacheService;
     private readonly ISettingsService _settingsService;
     private readonly ILoggingService _logger;
+    private readonly ConcurrentDictionary<string, IReadOnlyList<MediaItem>> _offlineCollectionMembersCache =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public ImageService(
         IJellyfinClient client,
@@ -35,36 +41,95 @@ public sealed class ImageService : IImageService
         ArgumentNullException.ThrowIfNull(item);
 
         var settings = _settingsService.Current;
-        if (item.BackdropImageTags.Count == 0)
+
+        List<BackdropCandidate> candidates;
+        List<string> knownMemberIds;
+        var networkErrorOccurred = false;
+        string? lastFailureReason = null;
+
+        if (item.IsCollection)
         {
+            var collectionResult = await CollectCollectionCandidatesInternalAsync(item, settings, cancellationToken);
+            candidates = collectionResult.Candidates;
+            knownMemberIds = collectionResult.KnownMemberIds;
+            networkErrorOccurred = collectionResult.NetworkErrorOccurred;
+            lastFailureReason = collectionResult.FailureReason;
+        }
+        else
+        {
+            knownMemberIds = [];
+            if (item.BackdropImageTags.Count == 0)
+            {
+                return ResolveWithoutBackdrop(item, settings);
+            }
+
+            candidates = new List<BackdropCandidate>(item.BackdropImageTags.Count);
+            for (var i = 0; i < item.BackdropImageTags.Count; i++)
+            {
+                candidates.Add(new BackdropCandidate(
+                    item.Id,
+                    item.Name,
+                    i,
+                    item.BackdropImageTags[i],
+                    item.BackdropImageUrl,
+                    IsFromCollectionMember: false));
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            if (networkErrorOccurred)
+            {
+                var offlineInfo = new JellyfinImageInfo
+                {
+                    ItemId = item.Id,
+                    ImageIndex = 0,
+                    MaxWidth = DefaultMaxWidth,
+                    Quality = DefaultQuality,
+                    RequestUrl = item.BackdropImageUrl
+                };
+
+                return TryOfflineCacheOrFallback(
+                    item,
+                    knownMemberIds,
+                    offlineInfo,
+                    settings,
+                    lastFailureReason ?? "دریافت فهرست آثار عضو کالکشن ناموفق بود.");
+            }
+
             return ResolveWithoutBackdrop(item, settings);
         }
 
-        var candidateIndices = BuildCandidateIndices(item.BackdropImageTags.Count, settings);
+        var candidateIndices = BuildCandidateIndices(candidates.Count, settings);
         var rejectedByAspectCount = 0;
+        var anyNonAspectFailure = false;
         string? lastAspectReason = null;
-        string? lastFailureReason = null;
         JellyfinImageInfo? lastImageInfo = null;
-        var networkErrorOccurred = false;
         var unauthenticated = false;
+        var rejectedContentHashes = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var imageIndex in candidateIndices)
+        foreach (var candidatePosition in candidateIndices)
         {
-            var tag = item.BackdropImageTags[imageIndex];
+            var candidate = candidates[candidatePosition];
             var imageInfo = new JellyfinImageInfo
             {
-                ItemId = item.Id,
-                ImageIndex = imageIndex,
-                Tag = tag,
+                ItemId = candidate.SourceItemId,
+                ImageIndex = candidate.ImageIndex,
+                Tag = candidate.Tag,
                 MaxWidth = DefaultMaxWidth,
                 Quality = DefaultQuality,
-                RequestUrl = item.BackdropImageUrl
+                RequestUrl = candidate.RequestUrl ?? item.BackdropImageUrl
             };
             lastImageInfo = imageInfo;
 
-            var cachedPath = _cacheService.TryGetCachedFile(item.Id, imageIndex, tag);
+            var cachedPath = _cacheService.TryGetCachedFile(candidate.SourceItemId, candidate.ImageIndex, candidate.Tag);
             if (cachedPath is not null)
             {
+                if (item.IsCollection && IsDuplicateFileContent(cachedPath, rejectedContentHashes))
+                {
+                    continue;
+                }
+
                 if (ImageAspectFilter.IsAcceptableFile(cachedPath, settings, out var cachedAspectReason))
                 {
                     return new BackdropResolveResult
@@ -72,13 +137,16 @@ public sealed class ImageService : IImageService
                         Status = BackdropResolveStatus.Success,
                         LocalFilePath = cachedPath,
                         ImageInfo = imageInfo,
-                        Message = "تصویر از کش محلی بارگذاری شد."
+                        Message = candidate.IsFromCollectionMember
+                            ? $"تصویر از کش محلی اثر «{candidate.SourceItemName}» در کالکشن بارگذاری شد."
+                            : "تصویر از کش محلی بارگذاری شد."
                     };
                 }
 
                 rejectedByAspectCount++;
                 lastAspectReason = cachedAspectReason;
-                _logger.Info($"Backdrop شماره {imageIndex} عنوان «{item.Name}» ({item.Id}) در کش به‌دلیل نسبت نامناسب رد شد: {cachedAspectReason}");
+                RecordRejectedFileHash(cachedPath, rejectedContentHashes);
+                _logger.Info($"Backdrop شماره {candidate.ImageIndex} عنوان «{candidate.SourceItemName}» ({candidate.SourceItemId}) در کش به‌دلیل نسبت نامناسب رد شد: {cachedAspectReason}");
                 continue;
             }
 
@@ -96,9 +164,9 @@ public sealed class ImageService : IImageService
             {
                 var (bytes, _) = await _client.DownloadBackdropImageAsync(
                     session.ServerUri,
-                    item.Id,
-                    imageIndex,
-                    tag,
+                    candidate.SourceItemId,
+                    candidate.ImageIndex,
+                    candidate.Tag,
                     DefaultMaxWidth,
                     DefaultQuality,
                     session.AccessToken,
@@ -107,8 +175,15 @@ public sealed class ImageService : IImageService
 
                 if (!ImageFormatValidator.TryDetectImageExtension(bytes, out var extension))
                 {
-                    _logger.Warning($"تصویر دریافت‌شده برای {item.Name} ({item.Id}) در Backdrop شماره {imageIndex} ناقص یا نامعتبر بود.");
+                    anyNonAspectFailure = true;
+                    _logger.Warning($"تصویر دریافت‌شده برای {candidate.SourceItemName} ({candidate.SourceItemId}) در Backdrop شماره {candidate.ImageIndex} ناقص یا نامعتبر بود.");
                     lastFailureReason = "تصویر دریافت‌شده از سرور خراب یا ناقص است.";
+                    continue;
+                }
+
+                var contentHash = item.IsCollection ? ComputeContentHash(bytes) : null;
+                if (contentHash is not null && rejectedContentHashes.Contains(contentHash))
+                {
                     continue;
                 }
 
@@ -116,20 +191,26 @@ public sealed class ImageService : IImageService
                 {
                     rejectedByAspectCount++;
                     lastAspectReason = aspectReason;
-                    _logger.Info($"Backdrop شماره {imageIndex} عنوان «{item.Name}» ({item.Id}) به‌دلیل نسبت تصویر نامناسب رد شد: {aspectReason}");
+                    if (contentHash is not null)
+                    {
+                        rejectedContentHashes.Add(contentHash);
+                    }
+
+                    _logger.Info($"Backdrop شماره {candidate.ImageIndex} عنوان «{candidate.SourceItemName}» ({candidate.SourceItemId}) به‌دلیل نسبت تصویر نامناسب رد شد: {aspectReason}");
                     continue;
                 }
 
                 var savedPath = await _cacheService.SaveToCacheAsync(
-                    item.Id,
-                    imageIndex,
-                    tag,
+                    candidate.SourceItemId,
+                    candidate.ImageIndex,
+                    candidate.Tag,
                     bytes,
                     extension,
                     cancellationToken);
 
                 if (savedPath is null)
                 {
+                    anyNonAspectFailure = true;
                     lastFailureReason = "فضای دیسک کافی نیست یا نوشتن در پوشهٔ کش امکان‌پذیر نشد.";
                     continue;
                 }
@@ -141,19 +222,22 @@ public sealed class ImageService : IImageService
                     Status = BackdropResolveStatus.Success,
                     LocalFilePath = savedPath,
                     ImageInfo = imageInfo,
-                    Message = "تصویر Backdrop دریافت و در کش ذخیره شد."
+                    Message = candidate.IsFromCollectionMember
+                        ? $"تصویر Backdrop اثر «{candidate.SourceItemName}» از کالکشن دریافت و در کش ذخیره شد."
+                        : "تصویر Backdrop دریافت و در کش ذخیره شد."
                 };
             }
             catch (JellyfinApiException ex)
             {
-                _logger.Warning($"خطا در دریافت Backdrop برای {item.Name}: {ex.Message}");
+                anyNonAspectFailure = true;
+                _logger.Warning($"خطا در دریافت Backdrop برای {candidate.SourceItemName}: {ex.Message}");
                 networkErrorOccurred = true;
                 lastFailureReason = ex.Message;
                 break;
             }
         }
 
-        if (rejectedByAspectCount == candidateIndices.Count)
+        if (rejectedByAspectCount > 0 && !anyNonAspectFailure && !unauthenticated && !networkErrorOccurred)
         {
             return new BackdropResolveResult
             {
@@ -165,20 +249,22 @@ public sealed class ImageService : IImageService
             };
         }
 
+        var firstCandidate = candidates[candidateIndices[0]];
         var fallbackImageInfo = lastImageInfo ?? new JellyfinImageInfo
         {
-            ItemId = item.Id,
-            ImageIndex = candidateIndices[0],
-            Tag = item.BackdropImageTags[candidateIndices[0]],
+            ItemId = firstCandidate.SourceItemId,
+            ImageIndex = firstCandidate.ImageIndex,
+            Tag = firstCandidate.Tag,
             MaxWidth = DefaultMaxWidth,
             Quality = DefaultQuality,
-            RequestUrl = item.BackdropImageUrl
+            RequestUrl = firstCandidate.RequestUrl ?? item.BackdropImageUrl
         };
 
         if (unauthenticated || networkErrorOccurred)
         {
             return TryOfflineCacheOrFallback(
                 item,
+                knownMemberIds,
                 fallbackImageInfo,
                 settings,
                 lastFailureReason ?? "اتصال فعال برقرار نیست.");
@@ -188,6 +274,154 @@ public sealed class ImageService : IImageService
             fallbackImageInfo,
             settings,
             lastFailureReason ?? "دریافت تصویر مناسب برای این عنوان ناموفق بود.");
+    }
+
+    internal async Task<IReadOnlyList<BackdropCandidate>> CollectBackdropCandidatesAsync(
+        MediaItem item,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        if (!item.IsCollection)
+        {
+            var direct = new List<BackdropCandidate>(item.BackdropImageTags.Count);
+            for (var i = 0; i < item.BackdropImageTags.Count; i++)
+            {
+                direct.Add(new BackdropCandidate(
+                    item.Id,
+                    item.Name,
+                    i,
+                    item.BackdropImageTags[i],
+                    item.BackdropImageUrl,
+                    IsFromCollectionMember: false));
+            }
+
+            return direct;
+        }
+
+        var result = await CollectCollectionCandidatesInternalAsync(item, _settingsService.Current, cancellationToken);
+        return result.Candidates;
+    }
+
+    private async Task<CollectionCandidateCollectionResult> CollectCollectionCandidatesInternalAsync(
+        MediaItem rootCollection,
+        AppSettings settings,
+        CancellationToken cancellationToken)
+    {
+        var candidates = new List<BackdropCandidate>();
+        var knownMemberIds = new List<string>();
+        var visitedItemIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { rootCollection.Id };
+        var seenTags = new HashSet<string>(StringComparer.Ordinal);
+        var networkErrorOccurred = false;
+        string? failureReason = null;
+
+        AddItemCandidates(rootCollection, isFromMember: false, candidates, seenTags);
+
+        var queue = new Queue<(MediaItem Collection, int Depth)>();
+        queue.Enqueue((rootCollection, 0));
+
+        while (queue.Count > 0)
+        {
+            var (currentCollection, depth) = queue.Dequeue();
+            if (depth >= MaxCollectionNestingDepth)
+            {
+                continue;
+            }
+
+            var (members, fetchError, errorReason) = await GetCollectionMembersAsync(currentCollection, settings, cancellationToken);
+            if (fetchError)
+            {
+                networkErrorOccurred = true;
+                failureReason ??= errorReason;
+            }
+
+            foreach (var member in members)
+            {
+                if (string.IsNullOrWhiteSpace(member.Id) || !visitedItemIds.Add(member.Id))
+                {
+                    continue;
+                }
+
+                knownMemberIds.Add(member.Id);
+                AddItemCandidates(member, isFromMember: true, candidates, seenTags);
+
+                if (member.IsCollection)
+                {
+                    queue.Enqueue((member, depth + 1));
+                }
+            }
+        }
+
+        return new CollectionCandidateCollectionResult(candidates, knownMemberIds, networkErrorOccurred, failureReason);
+    }
+
+    private async Task<(IReadOnlyList<MediaItem> Members, bool NetworkError, string? ErrorReason)> GetCollectionMembersAsync(
+        MediaItem collection,
+        AppSettings settings,
+        CancellationToken cancellationToken)
+    {
+        if (collection.CollectionMembers.Count > 0)
+        {
+            _offlineCollectionMembersCache[collection.Id] = collection.CollectionMembers;
+            return (collection.CollectionMembers, false, null);
+        }
+
+        var session = _authService.CurrentSession;
+        if (!session.IsAuthenticated ||
+            session.ServerUri is null ||
+            string.IsNullOrWhiteSpace(session.AccessToken))
+        {
+            var cached = _offlineCollectionMembersCache.TryGetValue(collection.Id, out var offlineMembers)
+                ? offlineMembers
+                : [];
+            return (cached, false, null);
+        }
+
+        try
+        {
+            var members = await _client.GetCollectionItemsAsync(
+                session.ServerUri,
+                session.UserId,
+                session.AccessToken,
+                settings.DeviceId,
+                collection.Id,
+                cancellationToken);
+
+            _offlineCollectionMembersCache[collection.Id] = members;
+            return (members, false, null);
+        }
+        catch (JellyfinApiException ex)
+        {
+            _logger.Warning($"خطا در دریافت اعضای کالکشن «{collection.Name}» ({collection.Id}): {ex.Message}");
+            var cached = _offlineCollectionMembersCache.TryGetValue(collection.Id, out var offlineMembers)
+                ? offlineMembers
+                : [];
+            return (cached, true, ex.Message);
+        }
+    }
+
+    private static void AddItemCandidates(
+        MediaItem sourceItem,
+        bool isFromMember,
+        List<BackdropCandidate> candidates,
+        HashSet<string> seenTags)
+    {
+        for (var i = 0; i < sourceItem.BackdropImageTags.Count; i++)
+        {
+            var tag = sourceItem.BackdropImageTags[i];
+            if (!string.IsNullOrWhiteSpace(tag) && !seenTags.Add(tag))
+            {
+                continue;
+            }
+
+            candidates.Add(new BackdropCandidate(
+                sourceItem.Id,
+                sourceItem.Name,
+                i,
+                tag,
+                sourceItem.BackdropImageUrl,
+                isFromMember));
+        }
     }
 
     private static List<int> BuildCandidateIndices(int availableCount, AppSettings settings)
@@ -241,13 +475,25 @@ public sealed class ImageService : IImageService
 
     private BackdropResolveResult TryOfflineCacheOrFallback(
         MediaItem item,
+        IReadOnlyList<string> knownMemberIds,
         JellyfinImageInfo imageInfo,
         AppSettings settings,
         string reason)
     {
-        var offlineCached = _cacheService.TryGetAnyCachedFileForItem(item.Id);
-        if (offlineCached is not null &&
-            ImageAspectFilter.IsAcceptableFile(offlineCached, settings, out _))
+        var offlineCached = FindValidOfflineCachedFile(item.Id, settings);
+        if (offlineCached is null && item.IsCollection)
+        {
+            foreach (var memberId in EnumerateKnownMemberIds(item, knownMemberIds))
+            {
+                offlineCached = FindValidOfflineCachedFile(memberId, settings);
+                if (offlineCached is not null)
+                {
+                    break;
+                }
+            }
+        }
+
+        if (offlineCached is not null)
         {
             return new BackdropResolveResult
             {
@@ -259,6 +505,46 @@ public sealed class ImageService : IImageService
         }
 
         return TryFallbackOrFailure(imageInfo, settings, reason);
+    }
+
+    private string? FindValidOfflineCachedFile(string itemId, AppSettings settings)
+    {
+        var cached = _cacheService.TryGetAnyCachedFileForItem(itemId);
+        return cached is not null && ImageAspectFilter.IsAcceptableFile(cached, settings, out _)
+            ? cached
+            : null;
+    }
+
+    private IEnumerable<string> EnumerateKnownMemberIds(MediaItem rootItem, IReadOnlyList<string> discoveredMemberIds)
+    {
+        var yielded = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { rootItem.Id };
+
+        foreach (var memberId in discoveredMemberIds)
+        {
+            if (yielded.Add(memberId))
+            {
+                yield return memberId;
+            }
+        }
+
+        foreach (var member in rootItem.CollectionMembers)
+        {
+            if (!string.IsNullOrWhiteSpace(member.Id) && yielded.Add(member.Id))
+            {
+                yield return member.Id;
+            }
+        }
+
+        if (_offlineCollectionMembersCache.TryGetValue(rootItem.Id, out var cachedMembers))
+        {
+            foreach (var member in cachedMembers)
+            {
+                if (!string.IsNullOrWhiteSpace(member.Id) && yielded.Add(member.Id))
+                {
+                    yield return member.Id;
+                }
+            }
+        }
     }
 
     private static BackdropResolveResult TryFallbackOrFailure(
@@ -284,4 +570,52 @@ public sealed class ImageService : IImageService
             Message = reason
         };
     }
+
+    private static bool IsDuplicateFileContent(string filePath, HashSet<string> rejectedHashes)
+    {
+        if (rejectedHashes.Count == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            var bytes = File.ReadAllBytes(filePath);
+            return rejectedHashes.Contains(ComputeContentHash(bytes));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void RecordRejectedFileHash(string filePath, HashSet<string> rejectedHashes)
+    {
+        try
+        {
+            var bytes = File.ReadAllBytes(filePath);
+            rejectedHashes.Add(ComputeContentHash(bytes));
+        }
+        catch
+        {
+            // Best-effort deduplication
+        }
+    }
+
+    private static string ComputeContentHash(byte[] bytes)
+        => Convert.ToHexString(SHA256.HashData(bytes));
+
+    internal readonly record struct BackdropCandidate(
+        string SourceItemId,
+        string SourceItemName,
+        int ImageIndex,
+        string Tag,
+        string? RequestUrl,
+        bool IsFromCollectionMember);
+
+    private readonly record struct CollectionCandidateCollectionResult(
+        List<BackdropCandidate> Candidates,
+        List<string> KnownMemberIds,
+        bool NetworkErrorOccurred,
+        string? FailureReason);
 }

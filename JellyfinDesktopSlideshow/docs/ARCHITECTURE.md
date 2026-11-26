@@ -40,14 +40,16 @@ JellyfinDesktopSlideshow/
    - کلید API یا توکن دریافت‌شده **هرگز** در `settings.json` یا لاگ‌ها نوشته نمی‌شود؛ فقط از طریق `CredWriteW` در **Windows Credential Manager** با کلید `JellyfinDesktopSlideshow:AccessToken` ذخیره می‌شود. هنگام خروج در حالت کلید API فقط حافظهٔ امن محلی پاک می‌شود و `POST /Sessions/Logout` فراخوانی نمی‌گردد.
 
 2. **دریافت کتابخانه‌ها و رسانه‌ها (`LibraryService`):**
-   - در حالت **کلید API**: دریافت کتابخانه‌ها از `GET /Library/MediaFolders` و دریافت رسانه‌ها از `GET /Items` با `Recursive=true` و `Fields=ProductionYear,BackdropImageTags`.
+   - در حالت **کلید API**: دریافت کتابخانه‌ها از `GET /Library/MediaFolders` و دریافت رسانه‌ها از `GET /Items` با `Recursive=true` و `Fields=ProductionYear,BackdropImageTags` (همراه با `IncludeItemTypes` شامل `BoxSet` برای پشتیبانی از کتابخانهٔ مجزای کالکشن‌ها و کالکشن‌های گروه‌بندی‌شده داخل فیلم/سریال).
    - در حالت **نام کاربری و رمز عبور**: دریافت کتابخانه‌های مجاز کاربر از `GET /Users/{userId}/Views` (با fallback خودکار `404` به `GET /UserViews?userId={userId}`) و دریافت رسانه‌ها از `GET /Users/{userId}/Items`.
+   - برای آیتم‌های کالکشن (`Type = BoxSet`)، اعضای درون کالکشن با `ParentId={collectionId}&Recursive=true&CollapseBoxSetItems=false` دریافت می‌شوند تا آثار مخفی‌شده در نمای کتابخانه هم برای بررسی Backdrop در دسترس باشند.
 
 3. **دریافت و کش تصاویر (`ImageService` + `CacheService` + `ImageFormatValidator` + `ImageAspectFilter`):**
    - تصویر Backdrop از `GET /Items/{itemId}/Images/Backdrop/{index}?maxWidth=1920&quality=92&tag=...` با هدر `Authorization: MediaBrowser` دانلود می‌شود (بدون `api_key` در QueryString).
+   - برای آیتم‌های کالکشن (`BoxSet`)، منابع تصویر شامل Backdropهای خود کالکشن و Backdropهای آثار عضو آن (به‌همراه حذف موارد تکراری بر اساس شناسه، تگ و محتوای باینری) در کنار هم ارزیابی می‌شوند؛ با این حال در `SlideshowState` و `CurrentWallpaperItemStore` همچنان خود کالکشن ثبت می‌شود تا باز کردن عنوان در Jellyfin دست‌نخورده بماند.
    - بایت‌های دریافتی با Magic Bytes (`ImageFormatValidator.TryDetectImageExtension`) و سپس نسبت ابعاد (`ImageFormatValidator.TryReadImageDimensions` + `ImageAspectFilter`) بررسی می‌شوند تا فایل خراب یا بنرهای خیلی دراز، مربعی و عمودی در کش ذخیره نشوند (پیشنهادی: `1.25` تا `2.80` با سطح‌های قابل انتخاب در تب ۶ تنظیمات و پیش‌فرض فعال).
-   - اگر Backdrop انتخاب‌شده نامناسب باشد، سایر `BackdropImageTags` همان عنوان بررسی می‌شوند و در صورت نبود هیچ تصویر مناسبی، عنوان در اسلایدشو رد (`SkippedNoBackdrop`) می‌گردد.
-   - اگر عنوان `Backdrop` نداشته باشد یا شبکه قطع باشد، ترتیب اولویت عبارت است از: **کش محلی** -> **تصویر جایگزین (`FallbackImagePath`)** -> **رد کردن عنوان یا حفظ تصویر قبلی**.
+   - اگر Backdrop انتخاب‌شده نامناسب باشد، سایر `BackdropImageTags` همان عنوان (یا آثار عضو کالکشن) بررسی می‌شوند و در صورت نبود هیچ تصویر مناسبی، عنوان در اسلایدشو رد (`SkippedNoBackdrop`) می‌گردد.
+   - اگر عنوان `Backdrop` نداشته باشد یا شبکه قطع باشد، ترتیب اولویت عبارت است از: **کش محلی (شامل کش اعضای شناخته‌شدهٔ کالکشن)** -> **تصویر جایگزین (`FallbackImagePath`)** -> **رد کردن عنوان یا حفظ تصویر قبلی**.
 
 4. **زمان‌بندی اسلایدشو (`SlideshowService` + `WpfDispatcherTimerAdapter`):**
    - زمان‌بندی با `DispatcherTimer` در ترد UI انجام می‌شود (بدون `while(true)` یا Thread Sleep).

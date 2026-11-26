@@ -43,6 +43,14 @@ public interface IJellyfinClient
         int limit,
         CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<MediaItem>> GetCollectionItemsAsync(
+        Uri serverUri,
+        string? userId,
+        string accessToken,
+        string deviceId,
+        string collectionId,
+        CancellationToken cancellationToken = default);
+
     Task<(byte[] Bytes, string? ContentType)> DownloadBackdropImageAsync(
         Uri serverUri,
         string itemId,
