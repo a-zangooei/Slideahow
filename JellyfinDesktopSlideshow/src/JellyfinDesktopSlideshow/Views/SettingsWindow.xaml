@@ -33,29 +33,62 @@
                                  Margin="0,0,0,10"
                                  ToolTip="مثال: http://192.168.1.10:8096 یا https://media.example.com" />
 
-                        <TextBlock Text="نام کاربری" FontWeight="SemiBold" Margin="0,0,0,4" />
-                        <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
-                                 FlowDirection="LeftToRight"
-                                 Padding="8,6"
-                                 Margin="0,0,0,10" />
+                        <TextBlock Text="روش احراز هویت" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <ComboBox ItemsSource="{Binding AuthMethodOptions}"
+                                  SelectedValue="{Binding SelectedAuthMethod}"
+                                  SelectedValuePath="Key"
+                                  DisplayMemberPath="Value"
+                                  Padding="8,5"
+                                  Margin="0,0,0,12" />
 
-                        <TextBlock Text="رمز عبور" FontWeight="SemiBold" Margin="0,0,0,4" />
-                        <PasswordBox x:Name="PasswordInput"
+                        <StackPanel Visibility="{Binding IsApiKeyAuthSelected, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="کلید API سرور Jellyfin" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <PasswordBox x:Name="ApiKeyInput"
+                                         FlowDirection="LeftToRight"
+                                         Padding="8,6"
+                                         Margin="0,0,0,8"
+                                         ToolTip="کلید ساخته شده در داشبورد Jellyfin ← Advanced ← API Keys" />
+
+                            <Border Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,12">
+                                <TextBlock Text="روش اصلی و پیشنهادی: در پنل مدیریت Jellyfin به مسیر Dashboard ← Advanced ← API Keys بروید، یک کلید جدید بسازید و اینجا وارد کنید. این کلید بدون نیاز به رمز عبور و بدون انقضای نشست، به‌صورت رمزنگاری‌شده در Windows Credential Manager ذخیره می‌شود و فقط در هدر امن Authorization: MediaBrowser ارسال می‌گردد."
+                                           Foreground="#1E3A8A"
+                                           FontSize="12"
+                                           TextWrapping="Wrap" />
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding IsPasswordAuthSelected, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="نام کاربری" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
                                      FlowDirection="LeftToRight"
                                      Padding="8,6"
-                                     Margin="0,0,0,12" />
+                                     Margin="0,0,0,10" />
+
+                            <TextBlock Text="رمز عبور" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <PasswordBox x:Name="PasswordInput"
+                                         FlowDirection="LeftToRight"
+                                         Padding="8,6"
+                                         Margin="0,0,0,12" />
+                        </StackPanel>
 
                         <WrapPanel Margin="0,0,0,14">
                             <Button Content="تست اتصال"
                                     Command="{Binding TestConnectionCommand}"
                                     Padding="14,7"
                                     Margin="0,0,8,0" />
-                            <Button Content="ورود و ذخیرهٔ نشست"
-                                    Click="LoginButton_Click"
+                            <Button Content="اتصال و ذخیرهٔ کلید API"
+                                    Click="ConnectWithApiKeyButton_Click"
+                                    Visibility="{Binding IsApiKeyAuthSelected, Converter={StaticResource BoolToVisibility}}"
                                     Padding="16,7"
                                     FontWeight="SemiBold"
                                     Margin="0,0,8,0" />
-                            <Button Content="خروج از حساب"
+                            <Button Content="ورود و ذخیرهٔ نشست"
+                                    Click="LoginButton_Click"
+                                    Visibility="{Binding IsPasswordAuthSelected, Converter={StaticResource BoolToVisibility}}"
+                                    Padding="16,7"
+                                    FontWeight="SemiBold"
+                                    Margin="0,0,8,0" />
+                            <Button Content="قطع اتصال / خروج"
                                     Command="{Binding LogoutCommand}"
                                     Padding="14,7" />
                         </WrapPanel>

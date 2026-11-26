@@ -57,6 +57,55 @@ public sealed class LibraryServiceTests : IDisposable
         Assert.False(items.First(i => i.Id == "s-1").HasBackdrop);
     }
 
+    [Fact]
+    public async Task LibraryService_InApiKeyMode_LoadsMediaFoldersAndItemsWithoutUserId()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var settingsPath = Path.Combine(_tempDir, "settings-apikey.json");
+
+        var handler = new StubHttpMessageHandler(req =>
+        {
+            var path = req.RequestUri!.AbsolutePath;
+            if (path.EndsWith("/System/Info/Public", StringComparison.Ordinal))
+            {
+                return StubHttpMessageHandler.JsonResponse(HttpStatusCode.OK, """{"Id":"srv-1","ServerName":"NAS","Version":"10.10.3"}""");
+            }
+
+            if (path.EndsWith("/System/Info", StringComparison.Ordinal))
+            {
+                return StubHttpMessageHandler.JsonResponse(HttpStatusCode.OK, """{"Id":"srv-1","Version":"10.10.3"}""");
+            }
+
+            if (path.EndsWith("/Library/MediaFolders", StringComparison.Ordinal))
+            {
+                return StubHttpMessageHandler.JsonResponse(HttpStatusCode.OK, """{"Items":[{"Id":"lib-1","Name":"Movies","CollectionType":"movies"}],"TotalRecordCount":1}""");
+            }
+
+            if (path.EndsWith("/Items", StringComparison.Ordinal))
+            {
+                return StubHttpMessageHandler.JsonResponse(HttpStatusCode.OK, """{"Items":[{"Id":"m-1","Name":"Inception","Type":"Movie","BackdropImageTags":["t1"]}],"TotalRecordCount":1}""");
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        var logger = new NullLoggingService();
+        var settings = new SettingsService(logger, settingsPath);
+        settings.Load();
+
+        var client = new JellyfinClient(new HttpClient(handler), logger);
+        var auth = new AuthenticationService(client, settings, new InMemorySecureStorageService(), logger);
+        await auth.LoginWithApiKeyAsync("http://192.168.1.10:8096", "api-key-xyz");
+
+        var libraryService = new LibraryService(client, auth, settings);
+        var libs = await libraryService.GetAccessibleLibrariesAsync();
+        var items = await libraryService.GetMediaItemsAsync([libs[0].Id], ["Movie"]);
+
+        Assert.Single(libs);
+        Assert.Single(items);
+        Assert.Equal("Inception", items[0].Name);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))

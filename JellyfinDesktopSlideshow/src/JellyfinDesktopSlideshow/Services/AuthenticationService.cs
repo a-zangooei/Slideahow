@@ -43,6 +43,64 @@ public sealed class AuthenticationService : IAuthenticationService
         };
     }
 
+    public async Task<ConnectionSessionState> LoginWithApiKeyAsync(
+        string serverUrl,
+        string apiKey,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_settingsService.TryValidateServerUrl(serverUrl, out var serverUri, out var validationError) || serverUri is null)
+        {
+            throw new JellyfinApiException(JellyfinErrorKind.BadRequestOrVersionMismatch, validationError ?? "آدرس سرور نامعتبر است.");
+        }
+
+        var trimmedKey = (apiKey ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(trimmedKey))
+        {
+            throw new JellyfinApiException(JellyfinErrorKind.Unauthorized, "کلید API را وارد کنید.");
+        }
+
+        if (trimmedKey.Any(c => char.IsWhiteSpace(c) || char.IsControl(c)))
+        {
+            throw new JellyfinApiException(JellyfinErrorKind.Unauthorized, "فرمت کلید API معتبر نیست (نباید شامل فاصله یا سطر جدید باشد).");
+        }
+
+        var publicInfo = await _client.GetPublicServerInfoAsync(serverUri, cancellationToken);
+        var settings = _settingsService.Current;
+        var isValid = await _client.ValidateApiKeyAsync(serverUri, trimmedKey, settings.DeviceId, cancellationToken);
+        if (!isValid)
+        {
+            throw new JellyfinApiException(
+                JellyfinErrorKind.Unauthorized,
+                "کلید API واردشده معتبر نیست یا در سرور Jellyfin لغو شده است.");
+        }
+
+        _secureStorage.SaveSecret(settings.TokenCredentialKey, "ApiKey", trimmedKey);
+
+        settings.ServerUrl = serverUri.ToString().TrimEnd('/');
+        settings.ServerId = publicInfo.ServerId;
+        settings.AuthMethod = AppSettings.ApiKeyAuthMethod;
+        settings.UserId = null;
+        settings.Username = null;
+        _settingsService.Save(settings);
+
+        CurrentSession = new ConnectionSessionState
+        {
+            IsAuthenticated = true,
+            ServerUri = serverUri,
+            ServerName = publicInfo.ServerName,
+            ServerVersion = publicInfo.Version,
+            ServerId = publicInfo.ServerId,
+            UserId = null,
+            Username = "کلید API",
+            AccessToken = trimmedKey,
+            IsApiKeySession = true,
+            IsNonLocalPlainHttp = _settingsService.IsNonLocalPlainHttp(serverUri)
+        };
+
+        _logger.Info($"اتصال موفق با کلید API به سرور {publicInfo.ServerName} ({publicInfo.Version}).");
+        return CurrentSession;
+    }
+
     public async Task<ConnectionSessionState> LoginAsync(
         string serverUrl,
         string username,
@@ -69,6 +127,7 @@ public sealed class AuthenticationService : IAuthenticationService
 
         settings.ServerUrl = serverUri.ToString().TrimEnd('/');
         settings.ServerId = serverId;
+        settings.AuthMethod = AppSettings.PasswordAuthMethod;
         settings.UserId = auth.UserId;
         settings.Username = auth.Username;
         _settingsService.Save(settings);
@@ -83,6 +142,7 @@ public sealed class AuthenticationService : IAuthenticationService
             UserId = auth.UserId,
             Username = auth.Username,
             AccessToken = auth.AccessToken,
+            IsApiKeySession = false,
             IsNonLocalPlainHttp = _settingsService.IsNonLocalPlainHttp(serverUri)
         };
 
@@ -94,11 +154,19 @@ public sealed class AuthenticationService : IAuthenticationService
     {
         var settings = _settingsService.Current;
         if (string.IsNullOrWhiteSpace(settings.ServerUrl) ||
-            string.IsNullOrWhiteSpace(settings.UserId) ||
             !_settingsService.TryValidateServerUrl(settings.ServerUrl, out var serverUri, out _) ||
             serverUri is null)
         {
             CurrentSession = new ConnectionSessionState { IsAuthenticated = false };
+            return CurrentSession;
+        }
+
+        var isApiKeySession = string.Equals(settings.AuthMethod, AppSettings.ApiKeyAuthMethod, StringComparison.OrdinalIgnoreCase) ||
+                              string.IsNullOrWhiteSpace(settings.UserId);
+
+        if (!isApiKeySession && string.IsNullOrWhiteSpace(settings.UserId))
+        {
+            CurrentSession = new ConnectionSessionState { IsAuthenticated = false, ServerUri = serverUri };
             return CurrentSession;
         }
 
@@ -112,7 +180,9 @@ public sealed class AuthenticationService : IAuthenticationService
         try
         {
             var publicInfo = await _client.GetPublicServerInfoAsync(serverUri, cancellationToken);
-            var isValid = await _client.ValidateSessionAsync(serverUri, token, settings.DeviceId, cancellationToken);
+            var isValid = isApiKeySession
+                ? await _client.ValidateApiKeyAsync(serverUri, token, settings.DeviceId, cancellationToken)
+                : await _client.ValidateSessionAsync(serverUri, token, settings.DeviceId, cancellationToken);
 
             if (!isValid)
             {
@@ -123,7 +193,9 @@ public sealed class AuthenticationService : IAuthenticationService
                     ServerUri = serverUri,
                     ServerName = publicInfo.ServerName,
                     ServerVersion = publicInfo.Version,
-                    WarningOrError = "توکن ذخیره‌شده منقضی شده است. لطفاً دوباره وارد شوید."
+                    WarningOrError = isApiKeySession
+                        ? "کلید API ذخیره‌شده نامعتبر یا لغو شده است. لطفاً کلید جدید وارد کنید."
+                        : "توکن ذخیره‌شده منقضی شده است. لطفاً دوباره وارد شوید."
                 };
                 return CurrentSession;
             }
@@ -135,9 +207,10 @@ public sealed class AuthenticationService : IAuthenticationService
                 ServerName = publicInfo.ServerName,
                 ServerVersion = publicInfo.Version,
                 ServerId = string.IsNullOrWhiteSpace(settings.ServerId) ? publicInfo.ServerId : settings.ServerId,
-                UserId = settings.UserId,
-                Username = settings.Username,
+                UserId = isApiKeySession ? null : settings.UserId,
+                Username = isApiKeySession ? "کلید API" : settings.Username,
                 AccessToken = token,
+                IsApiKeySession = isApiKeySession,
                 IsNonLocalPlainHttp = _settingsService.IsNonLocalPlainHttp(serverUri)
             };
             return CurrentSession;
@@ -159,8 +232,10 @@ public sealed class AuthenticationService : IAuthenticationService
     {
         var settings = _settingsService.Current;
         var token = CurrentSession.AccessToken ?? _secureStorage.ReadSecret(settings.TokenCredentialKey);
+        var isApiKeySession = CurrentSession.IsApiKeySession ||
+                              string.Equals(settings.AuthMethod, AppSettings.ApiKeyAuthMethod, StringComparison.OrdinalIgnoreCase);
 
-        if (CurrentSession.ServerUri is not null && !string.IsNullOrWhiteSpace(token))
+        if (!isApiKeySession && CurrentSession.ServerUri is not null && !string.IsNullOrWhiteSpace(token))
         {
             try
             {
@@ -178,6 +253,8 @@ public sealed class AuthenticationService : IAuthenticationService
             IsAuthenticated = false,
             ServerUri = CurrentSession.ServerUri
         };
-        _logger.Info("خروج از حساب انجام شد و توکن محلی پاک گردید.");
+        _logger.Info(isApiKeySession
+            ? "قطع اتصال انجام شد و کلید API ذخیره‌شده از حافظهٔ امن پاک گردید."
+            : "خروج از حساب انجام شد و توکن محلی پاک گردید.");
     }
 }

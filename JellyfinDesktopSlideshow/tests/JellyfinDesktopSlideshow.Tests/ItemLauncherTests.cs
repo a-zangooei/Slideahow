@@ -201,6 +201,9 @@ public sealed class ItemLauncherTests
         public Task<ServerPublicInfo> TestConnectionAsync(string serverUrl, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
+        public Task<ConnectionSessionState> LoginWithApiKeyAsync(string serverUrl, string apiKey, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public Task<ConnectionSessionState> LoginAsync(string serverUrl, string username, string password, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
@@ -245,12 +248,15 @@ public sealed class ItemLauncherTests
         public Task<bool> ValidateSessionAsync(Uri serverUri, string accessToken, string deviceId, CancellationToken cancellationToken = default)
             => Task.FromResult(true);
 
-        public Task<IReadOnlyList<JellyfinLibrary>> GetUserViewsAsync(Uri serverUri, string userId, string accessToken, string deviceId, CancellationToken cancellationToken = default)
+        public Task<bool> ValidateApiKeyAsync(Uri serverUri, string apiKey, string deviceId, CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
+
+        public Task<IReadOnlyList<JellyfinLibrary>> GetUserViewsAsync(Uri serverUri, string? userId, string accessToken, string deviceId, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<JellyfinLibrary>>([]);
 
         public Task<(IReadOnlyList<MediaItem> Items, int TotalRecordCount)> GetItemsAsync(
             Uri serverUri,
-            string userId,
+            string? userId,
             string accessToken,
             string deviceId,
             string? parentId,

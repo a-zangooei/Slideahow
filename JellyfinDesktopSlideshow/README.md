@@ -4,8 +4,8 @@
 
 ## ویژگی‌های کلیدی
 - **سبک و کاملاً بومی:** بدون Electron، WebView یا مرورگر داخلی؛ ساخته‌شده با WPF و Win32 API استاندارد.
-- **سازگار با API رسمی Jellyfin:** احراز هویت با `POST /Users/AuthenticateByName`، دریافت کتابخانه‌ها، رسانه‌ها، تصاویر Backdrop با هدر `Authorization: MediaBrowser` (بدون قرار دادن توکن در URL یا لاگ).
-- **امنیت نشست و تنظیمات:** نگهداری توکن دسترسی در **Windows Credential Manager** و ذخیرهٔ تنظیمات غیرمحرمانه به‌صورت اتمیک در `%LOCALAPPDATA%\JellyfinDesktopSlideshow\settings.json`.
+- **سازگار با API رسمی Jellyfin:** احراز هویت اصلی با **کلید API** (`Dashboard -> Advanced -> API Keys` همراه با اعتبارسنجی از `GET /System/Info` و دریافت کتابخانه/رسانه از `/Library/MediaFolders` و `/Items`) و پشتیبانی از ورود با **نام کاربری و رمز عبور** (`POST /Users/AuthenticateByName`)، همگی با هدر امن `Authorization: MediaBrowser` (بدون قرار دادن کلید یا توکن در URL یا لاگ).
+- **امنیت نشست و تنظیمات:** نگهداری کلید API یا توکن دسترسی در **Windows Credential Manager** و ذخیرهٔ تنظیمات غیرمحرمانه به‌صورت اتمیک در `%LOCALAPPDATA%\JellyfinDesktopSlideshow\settings.json`.
 - **کش هوشمند محلی:** دانلود، اعتبارسنجی فرمت واقعی باینری تصاویر (JPEG/PNG/WebP/BMP)، حذف خودکار فایل‌های قدیمی/اضافی، پشتیبانی از آفلاین و تصویر جایگزین.
 - **موتور اسلایدشوی کم‌مصرف:** استفاده از `DispatcherTimer` (بدون حلقهٔ پرمصرف)، حالت تصادفی با پنجرهٔ عدم تکرار، حالت ترتیبی، قبلی/بعدی و Backoff هوشمند هنگام قطع سرور.
 - **والپیپر و چند مانیتور:** تغییر والپیپر از طریق `SystemParametersInfoW` و رجیستری دسکتاپ، تبدیل خودکار WebP به PNG، پشتیبانی از حالت‌های `Fill / Fit / Stretch / Center / Span`، واکنش به تغییر مانیتورها و امکان بازگردانی والپیپر اولیه هنگام خروج.

@@ -61,7 +61,7 @@
             </Grid>
         </Border>
 
-        <!-- ورود سریع در صورت متصل نبودن -->
+        <!-- اتصال سریع در صورت متصل نبودن -->
         <Border Grid.Row="1"
                 Visibility="{Binding NeedsQuickLogin, Converter={StaticResource BoolToVisibility}}"
                 Background="#FFFFFF"
@@ -72,12 +72,12 @@
                 Margin="0,0,0,12">
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.6*" />
+                    <ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="1.2*" />
+                    <ColumnDefinition Width="10" />
                     <ColumnDefinition Width="2*" />
-                    <ColumnDefinition Width="12" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="12" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="10" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
@@ -90,26 +90,57 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="2">
-                    <TextBlock Text="نام کاربری" FontWeight="SemiBold" Margin="0,0,0,4" />
-                    <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
-                             FlowDirection="LeftToRight"
-                             Padding="8,6" />
+                    <TextBlock Text="روش اتصال" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <ComboBox ItemsSource="{Binding AuthMethodOptions}"
+                              SelectedValue="{Binding SelectedAuthMethod}"
+                              SelectedValuePath="Key"
+                              DisplayMemberPath="Value"
+                              Padding="8,5" />
                 </StackPanel>
 
-                <StackPanel Grid.Column="4">
-                    <TextBlock Text="رمز عبور" FontWeight="SemiBold" Margin="0,0,0,4" />
-                    <PasswordBox x:Name="PasswordInput"
+                <StackPanel Grid.Column="4"
+                            Visibility="{Binding IsApiKeyAuthSelected, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="کلید API (Dashboard ← Advanced ← API Keys)" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <PasswordBox x:Name="ApiKeyInput"
+                                 FlowDirection="LeftToRight"
+                                 Padding="8,6"
+                                 ToolTip="کلید API ساخته‌شده در پنل مدیریت Jellyfin" />
+                </StackPanel>
+
+                <Grid Grid.Column="4"
+                      Visibility="{Binding IsPasswordAuthSelected, Converter={StaticResource BoolToVisibility}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="8" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="نام کاربری" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
                                  FlowDirection="LeftToRight"
                                  Padding="8,6" />
-                </StackPanel>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="رمز عبور" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <PasswordBox x:Name="PasswordInput"
+                                     FlowDirection="LeftToRight"
+                                     Padding="8,6" />
+                    </StackPanel>
+                </Grid>
 
                 <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Bottom">
                     <Button Content="تست اتصال"
                             Command="{Binding TestConnectionCommand}"
                             Padding="12,7"
                             Margin="0,0,8,0" />
+                    <Button Content="اتصال با کلید API"
+                            Click="ConnectWithApiKeyButton_Click"
+                            Visibility="{Binding IsApiKeyAuthSelected, Converter={StaticResource BoolToVisibility}}"
+                            Padding="14,7"
+                            FontWeight="SemiBold" />
                     <Button Content="ورود"
                             Click="LoginButton_Click"
+                            Visibility="{Binding IsPasswordAuthSelected, Converter={StaticResource BoolToVisibility}}"
                             Padding="16,7"
                             FontWeight="SemiBold" />
                 </StackPanel>

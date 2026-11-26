@@ -77,4 +77,60 @@ public sealed class JellyfinClientTests
 
         Assert.Equal(JellyfinErrorKind.Unreachable, ex.ErrorKind);
     }
+
+    [Fact]
+    public async Task ValidateApiKeyAsync_UsesSystemInfoWithMediaBrowserTokenHeader()
+    {
+        var handler = new StubHttpMessageHandler(req =>
+        {
+            if (req.Headers.Authorization?.Parameter?.Contains("Token=\"bad-key\"", StringComparison.Ordinal) == true)
+            {
+                return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+            }
+
+            return StubHttpMessageHandler.JsonResponse(HttpStatusCode.OK, """{"Id":"srv-1","Version":"10.10.3"}""");
+        });
+
+        var client = new JellyfinClient(new HttpClient(handler), new NullLoggingService());
+
+        var valid = await client.ValidateApiKeyAsync(new Uri("https://media.example.com/"), "good-key", "dev-1");
+        var invalid = await client.ValidateApiKeyAsync(new Uri("https://media.example.com/"), "bad-key", "dev-1");
+
+        Assert.True(valid);
+        Assert.False(invalid);
+        Assert.Equal("/System/Info", handler.Requests[0].RequestUri!.AbsolutePath);
+        Assert.Equal("MediaBrowser", handler.Requests[0].Headers.Authorization?.Scheme);
+        Assert.Contains("Token=\"good-key\"", handler.Requests[0].Headers.Authorization?.Parameter);
+    }
+
+    [Fact]
+    public async Task GetUserViewsAndItems_WithoutUserId_UseMediaFoldersAndRootItemsEndpoints()
+    {
+        var handler = new StubHttpMessageHandler(req =>
+        {
+            if (req.RequestUri!.AbsolutePath.EndsWith("/Library/MediaFolders", StringComparison.Ordinal))
+            {
+                return StubHttpMessageHandler.JsonResponse(
+                    HttpStatusCode.OK,
+                    """{"Items":[{"Id":"lib-movies","Name":"Movies","CollectionType":"movies"}],"TotalRecordCount":1}""");
+            }
+
+            return StubHttpMessageHandler.JsonResponse(
+                HttpStatusCode.OK,
+                """{"Items":[{"Id":"m-1","Name":"Dune","Type":"Movie","BackdropImageTags":["t1"]}],"TotalRecordCount":1}""");
+        });
+
+        var client = new JellyfinClient(new HttpClient(handler), new NullLoggingService());
+
+        var libs = await client.GetUserViewsAsync(new Uri("http://localhost:8096/"), null, "api-key-1", "dev-1");
+        var (items, total) = await client.GetItemsAsync(new Uri("http://localhost:8096/"), null, "api-key-1", "dev-1", "lib-movies", ["Movie"], 0, 50);
+
+        Assert.Single(libs);
+        Assert.Equal("lib-movies", libs[0].Id);
+        Assert.Single(items);
+        Assert.Equal(1, total);
+        Assert.Equal("/Library/MediaFolders", handler.Requests[0].RequestUri!.AbsolutePath);
+        Assert.Equal("/Items", handler.Requests[1].RequestUri!.AbsolutePath);
+        Assert.DoesNotContain("api-key-1", handler.Requests[1].RequestUri!.Query, StringComparison.OrdinalIgnoreCase);
+    }
 }

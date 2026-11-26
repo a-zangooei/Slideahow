@@ -20,6 +20,21 @@ public partial class SettingsWindow : Window
         }
     }
 
+    private async void ConnectWithApiKeyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsViewModel vm || vm.IsBusy)
+        {
+            return;
+        }
+
+        var apiKey = ApiKeyInput.Password;
+        var succeeded = await vm.LoginWithApiKeyAsync(apiKey);
+        if (succeeded)
+        {
+            ApiKeyInput.Clear();
+        }
+    }
+
     private async void LoginButton_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not SettingsViewModel vm || vm.IsBusy)

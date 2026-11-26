@@ -21,6 +21,7 @@ public sealed class SettingsViewModel : ViewModelBase
 
     private string _serverUrl = string.Empty;
     private string _username = string.Empty;
+    private JellyfinAuthMethod _selectedAuthMethod = JellyfinAuthMethod.ApiKey;
     private string _connectionStatus = "متصل نیست";
     private string _serverDetails = string.Empty;
     private string _securityWarning = string.Empty;
@@ -109,6 +110,12 @@ public sealed class SettingsViewModel : ViewModelBase
         new(BackdropAspectFilterPreset.Custom, "بازهٔ دستی (سفارشی)")
     ];
 
+    public IReadOnlyList<KeyValuePair<JellyfinAuthMethod, string>> AuthMethodOptions { get; } =
+    [
+        new(JellyfinAuthMethod.ApiKey, "کلید API (روش اصلی و پیشنهادی)"),
+        new(JellyfinAuthMethod.UsernamePassword, "نام کاربری و رمز عبور")
+    ];
+
     public AsyncRelayCommand TestConnectionCommand { get; }
     public AsyncRelayCommand LogoutCommand { get; }
     public AsyncRelayCommand LoadLibrariesCommand { get; }
@@ -168,6 +175,25 @@ public sealed class SettingsViewModel : ViewModelBase
         get => _username;
         set => SetProperty(ref _username, value);
     }
+
+    public JellyfinAuthMethod SelectedAuthMethod
+    {
+        get => _selectedAuthMethod;
+        set
+        {
+            if (SetProperty(ref _selectedAuthMethod, value))
+            {
+                SaveSetting(s => s.AuthMethod = value == JellyfinAuthMethod.UsernamePassword
+                    ? AppSettings.PasswordAuthMethod
+                    : AppSettings.ApiKeyAuthMethod);
+                OnPropertyChanged(nameof(IsApiKeyAuthSelected));
+                OnPropertyChanged(nameof(IsPasswordAuthSelected));
+            }
+        }
+    }
+
+    public bool IsApiKeyAuthSelected => SelectedAuthMethod == JellyfinAuthMethod.ApiKey;
+    public bool IsPasswordAuthSelected => SelectedAuthMethod == JellyfinAuthMethod.UsernamePassword;
 
     public string ConnectionStatus
     {
@@ -802,6 +828,9 @@ public sealed class SettingsViewModel : ViewModelBase
         var s = _settingsService.Current;
         _serverUrl = s.ServerUrl;
         _username = s.Username ?? string.Empty;
+        _selectedAuthMethod = string.Equals(s.AuthMethod, AppSettings.PasswordAuthMethod, StringComparison.OrdinalIgnoreCase)
+            ? JellyfinAuthMethod.UsernamePassword
+            : JellyfinAuthMethod.ApiKey;
         _includeMovies = s.IncludedItemTypes.Contains("Movie", StringComparer.OrdinalIgnoreCase);
         _includeSeries = s.IncludedItemTypes.Contains("Series", StringComparer.OrdinalIgnoreCase);
         _slideshowIntervalSeconds = s.SlideshowIntervalSeconds;
@@ -844,6 +873,40 @@ public sealed class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowDesktopShortcutIcon));
         OnPropertyChanged(nameof(IsFloatingOverlayEnabled));
         OnPropertyChanged(nameof(SelectedDesktopIconMode));
+    }
+
+    public async Task<bool> LoginWithApiKeyAsync(string apiKey)
+    {
+        IsBusy = true;
+        ErrorMessage = string.Empty;
+        StatusMessage = string.Empty;
+
+        try
+        {
+            await _authService.LoginWithApiKeyAsync(ServerUrl, apiKey);
+            RefreshSessionPresentation();
+            await LoadLibrariesInternalAsync();
+            await ApplyMediaSelectionInternalAsync();
+            StatusMessage = "اتصال با کلید API برقرار شد و فهرست رسانه‌ها دریافت گردید.";
+            StateSynchronized?.Invoke(this, EventArgs.Empty);
+            return true;
+        }
+        catch (JellyfinApiException ex)
+        {
+            ErrorMessage = ex.Message;
+            ConnectionStatus = "خطا در اتصال";
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("خطای غیرمنتظره هنگام اتصال با کلید API از پنجرهٔ تنظیمات.", ex);
+            ErrorMessage = "خطای غیرمنتظره هنگام اتصال با کلید API رخ داد.";
+            return false;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     public async Task<bool> LoginAsync(string password)
@@ -1158,7 +1221,9 @@ public sealed class SettingsViewModel : ViewModelBase
     {
         var session = _authService.CurrentSession;
         IsAuthenticated = session.IsAuthenticated;
-        ConnectionStatus = session.IsAuthenticated ? $"متصل ({session.Username})" : "متصل نیست";
+        ConnectionStatus = session.IsAuthenticated
+            ? (session.IsApiKeySession ? "متصل (کلید API)" : $"متصل ({session.Username})")
+            : "متصل نیست";
         ServerDetails = string.IsNullOrWhiteSpace(session.ServerName)
             ? string.Empty
             : $"{session.ServerName} — نسخه {session.ServerVersion}";

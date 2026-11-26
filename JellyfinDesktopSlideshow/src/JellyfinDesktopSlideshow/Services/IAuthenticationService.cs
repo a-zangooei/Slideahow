@@ -12,6 +12,7 @@ public sealed class ConnectionSessionState
     public string? UserId { get; init; }
     public string? Username { get; init; }
     public string? AccessToken { get; init; }
+    public bool IsApiKeySession { get; init; }
     public bool IsNonLocalPlainHttp { get; init; }
     public string? WarningOrError { get; init; }
 }
@@ -21,6 +22,11 @@ public interface IAuthenticationService
     ConnectionSessionState CurrentSession { get; }
 
     Task<ServerPublicInfo> TestConnectionAsync(string serverUrl, CancellationToken cancellationToken = default);
+
+    Task<ConnectionSessionState> LoginWithApiKeyAsync(
+        string serverUrl,
+        string apiKey,
+        CancellationToken cancellationToken = default);
 
     Task<ConnectionSessionState> LoginAsync(
         string serverUrl,

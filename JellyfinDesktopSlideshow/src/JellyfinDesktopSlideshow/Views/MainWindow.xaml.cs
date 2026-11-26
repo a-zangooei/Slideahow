@@ -66,6 +66,21 @@ public partial class MainWindow : Window
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
     }
 
+    private async void ConnectWithApiKeyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm || vm.IsBusy)
+        {
+            return;
+        }
+
+        var apiKey = ApiKeyInput.Password;
+        var succeeded = await vm.LoginWithApiKeyAsync(apiKey);
+        if (succeeded)
+        {
+            ApiKeyInput.Clear();
+        }
+    }
+
     private async void LoginButton_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not MainViewModel vm || vm.IsBusy)

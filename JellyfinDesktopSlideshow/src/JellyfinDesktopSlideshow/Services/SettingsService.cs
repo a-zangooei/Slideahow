@@ -52,6 +52,22 @@ public sealed class SettingsService : ISettingsService
                 Current.TokenCredentialKey = "JellyfinDesktopSlideshow:AccessToken";
             }
 
+            if (!string.Equals(Current.AuthMethod, AppSettings.ApiKeyAuthMethod, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(Current.AuthMethod, AppSettings.PasswordAuthMethod, StringComparison.OrdinalIgnoreCase))
+            {
+                Current.AuthMethod = string.IsNullOrWhiteSpace(Current.UserId)
+                    ? AppSettings.ApiKeyAuthMethod
+                    : AppSettings.PasswordAuthMethod;
+            }
+            else if (string.Equals(Current.AuthMethod, AppSettings.ApiKeyAuthMethod, StringComparison.OrdinalIgnoreCase))
+            {
+                Current.AuthMethod = AppSettings.ApiKeyAuthMethod;
+            }
+            else
+            {
+                Current.AuthMethod = AppSettings.PasswordAuthMethod;
+            }
+
             Current.SlideshowIntervalSeconds = Math.Clamp(Current.SlideshowIntervalSeconds, 5, 86400);
             Current.NonRepeatHistoryCount = Math.Clamp(Current.NonRepeatHistoryCount, 0, 100);
             Current.MaxCacheSizeMb = Math.Clamp(Current.MaxCacheSizeMb, 32, 8192);

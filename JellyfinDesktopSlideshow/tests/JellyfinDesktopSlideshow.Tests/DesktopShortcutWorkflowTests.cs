@@ -292,6 +292,7 @@ public sealed class DesktopShortcutWorkflowTests : IDisposable
     {
         public ConnectionSessionState CurrentSession { get; } = new();
         public Task<ServerPublicInfo> TestConnectionAsync(string serverUrl, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ConnectionSessionState> LoginWithApiKeyAsync(string serverUrl, string apiKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ConnectionSessionState> LoginAsync(string serverUrl, string username, string password, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ConnectionSessionState> TryRestoreSessionAsync(CancellationToken cancellationToken = default) => Task.FromResult(CurrentSession);
         public Task LogoutAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;

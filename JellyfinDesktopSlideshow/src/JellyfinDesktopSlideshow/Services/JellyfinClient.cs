@@ -126,14 +126,41 @@ public sealed class JellyfinClient : IJellyfinClient
         return true;
     }
 
+    public async Task<bool> ValidateApiKeyAsync(
+        Uri serverUri,
+        string apiKey,
+        string deviceId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(deviceId);
+
+        var requestUri = new Uri(serverUri, "System/Info");
+        using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+        ApplyMediaBrowserAuthorization(request, deviceId, apiKey);
+
+        using var response = await SendAsync(request, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            return false;
+        }
+
+        EnsureSuccess(response, "اعتبارسنجی کلید API ناموفق بود.");
+        return true;
+    }
+
     public async Task<IReadOnlyList<JellyfinLibrary>> GetUserViewsAsync(
         Uri serverUri,
-        string userId,
+        string? userId,
         string accessToken,
         string deviceId,
         CancellationToken cancellationToken = default)
     {
-        var primaryUri = new Uri(serverUri, $"Users/{Uri.EscapeDataString(userId)}/Views");
+        var primaryRoute = string.IsNullOrWhiteSpace(userId)
+            ? "Library/MediaFolders"
+            : $"Users/{Uri.EscapeDataString(userId)}/Views";
+
+        var primaryUri = new Uri(serverUri, primaryRoute);
         using var primaryRequest = new HttpRequestMessage(HttpMethod.Get, primaryUri);
         ApplyMediaBrowserAuthorization(primaryRequest, deviceId, accessToken);
 
@@ -143,7 +170,7 @@ public sealed class JellyfinClient : IJellyfinClient
 
         try
         {
-            if (primaryResponse.StatusCode == HttpStatusCode.NotFound)
+            if (!string.IsNullOrWhiteSpace(userId) && primaryResponse.StatusCode == HttpStatusCode.NotFound)
             {
                 var fallbackUri = new Uri(serverUri, $"UserViews?userId={Uri.EscapeDataString(userId)}");
                 using var fallbackRequest = new HttpRequestMessage(HttpMethod.Get, fallbackUri);
@@ -152,7 +179,7 @@ public sealed class JellyfinClient : IJellyfinClient
                 activeResponse = fallbackResponse;
             }
 
-            EnsureSuccess(activeResponse, "دریافت فهرست کتابخانه‌های کاربر ناموفق بود.");
+            EnsureSuccess(activeResponse, "دریافت فهرست کتابخانه‌ها ناموفق بود.");
             var result = await DeserializeAsync<BaseItemQueryResultDto>(activeResponse, cancellationToken);
 
             var libraries = new List<JellyfinLibrary>();
@@ -184,7 +211,7 @@ public sealed class JellyfinClient : IJellyfinClient
 
     public async Task<(IReadOnlyList<MediaItem> Items, int TotalRecordCount)> GetItemsAsync(
         Uri serverUri,
-        string userId,
+        string? userId,
         string accessToken,
         string deviceId,
         string? parentId,
@@ -212,8 +239,10 @@ public sealed class JellyfinClient : IJellyfinClient
             queryParts.Add($"IncludeItemTypes={joined}");
         }
 
-        var relativePath = $"Users/{Uri.EscapeDataString(userId)}/Items?{string.Join("&", queryParts)}";
-        var requestUri = new Uri(serverUri, relativePath);
+        var itemsRoute = string.IsNullOrWhiteSpace(userId)
+            ? $"Items?{string.Join("&", queryParts)}"
+            : $"Users/{Uri.EscapeDataString(userId)}/Items?{string.Join("&", queryParts)}";
+        var requestUri = new Uri(serverUri, itemsRoute);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
         ApplyMediaBrowserAuthorization(request, deviceId, accessToken);

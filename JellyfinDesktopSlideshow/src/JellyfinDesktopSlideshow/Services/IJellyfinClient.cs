@@ -19,16 +19,22 @@ public interface IJellyfinClient
         string deviceId,
         CancellationToken cancellationToken = default);
 
+    Task<bool> ValidateApiKeyAsync(
+        Uri serverUri,
+        string apiKey,
+        string deviceId,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<JellyfinLibrary>> GetUserViewsAsync(
         Uri serverUri,
-        string userId,
+        string? userId,
         string accessToken,
         string deviceId,
         CancellationToken cancellationToken = default);
 
     Task<(IReadOnlyList<MediaItem> Items, int TotalRecordCount)> GetItemsAsync(
         Uri serverUri,
-        string userId,
+        string? userId,
         string accessToken,
         string deviceId,
         string? parentId,

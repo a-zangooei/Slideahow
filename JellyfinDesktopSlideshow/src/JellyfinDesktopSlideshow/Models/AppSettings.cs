@@ -15,11 +15,14 @@ public enum OfflineBehaviorMode
 
 public sealed class AppSettings
 {
+    public const string ApiKeyAuthMethod = "ApiKey";
+    public const string PasswordAuthMethod = "AuthenticateByName";
+
     public string ServerUrl { get; set; } = string.Empty;
     public string? ServerId { get; set; }
     public string? UserId { get; set; }
     public string? Username { get; set; }
-    public string AuthMethod { get; set; } = "AuthenticateByName";
+    public string AuthMethod { get; set; } = ApiKeyAuthMethod;
     public string DeviceId { get; set; } = Guid.NewGuid().ToString("N");
     public string TokenCredentialKey { get; set; } = "JellyfinDesktopSlideshow:AccessToken";
 
@@ -81,4 +84,10 @@ public enum BackdropAspectFilterPreset
     StrictWidescreen = 1,
     RelaxedBannerOnly = 2,
     Custom = 3
+}
+
+public enum JellyfinAuthMethod
+{
+    ApiKey = 0,
+    UsernamePassword = 1
 }

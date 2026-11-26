@@ -33,7 +33,7 @@ public sealed class LibraryService : ILibraryService
         var session = EnsureAuthenticatedSession();
         var views = await _client.GetUserViewsAsync(
             session.ServerUri!,
-            session.UserId!,
+            session.UserId,
             session.AccessToken!,
             _settingsService.Current.DeviceId,
             cancellationToken);
@@ -61,7 +61,7 @@ public sealed class LibraryService : ILibraryService
             {
                 var (batch, totalCount) = await _client.GetItemsAsync(
                     session.ServerUri!,
-                    session.UserId!,
+                    session.UserId,
                     session.AccessToken!,
                     _settingsService.Current.DeviceId,
                     string.IsNullOrWhiteSpace(parentId) ? null : parentId,
@@ -93,12 +93,12 @@ public sealed class LibraryService : ILibraryService
         var session = _authService.CurrentSession;
         if (!session.IsAuthenticated ||
             session.ServerUri is null ||
-            string.IsNullOrWhiteSpace(session.UserId) ||
-            string.IsNullOrWhiteSpace(session.AccessToken))
+            string.IsNullOrWhiteSpace(session.AccessToken) ||
+            (!session.IsApiKeySession && string.IsNullOrWhiteSpace(session.UserId)))
         {
             throw new JellyfinApiException(
                 JellyfinErrorKind.Unauthorized,
-                "ابتدا وارد حساب کاربری Jellyfin شوید.");
+                "ابتدا از طریق کلید API یا حساب کاربری به سرور Jellyfin متصل شوید.");
         }
 
         return session;

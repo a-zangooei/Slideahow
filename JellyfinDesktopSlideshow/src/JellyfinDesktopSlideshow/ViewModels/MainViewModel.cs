@@ -24,6 +24,7 @@ public sealed class MainViewModel : ViewModelBase
     private bool _initialized;
     private string _serverUrl = string.Empty;
     private string _username = string.Empty;
+    private JellyfinAuthMethod _selectedAuthMethod = JellyfinAuthMethod.ApiKey;
     private string _connectionStatus = "متصل نیست";
     private string _serverDetails = string.Empty;
     private string _securityWarning = string.Empty;
@@ -48,6 +49,12 @@ public sealed class MainViewModel : ViewModelBase
     private bool _isAuthenticated;
 
     public ObservableCollection<MediaItem> MediaItems { get; } = [];
+
+    public IReadOnlyList<KeyValuePair<JellyfinAuthMethod, string>> AuthMethodOptions { get; } =
+    [
+        new(JellyfinAuthMethod.ApiKey, "کلید API (اصلی)"),
+        new(JellyfinAuthMethod.UsernamePassword, "نام کاربری و رمز")
+    ];
 
     public AsyncRelayCommand TestConnectionCommand { get; }
     public AsyncRelayCommand RefreshMediaCommand { get; }
@@ -99,6 +106,9 @@ public sealed class MainViewModel : ViewModelBase
         var settings = _settingsService.Load();
         _serverUrl = settings.ServerUrl;
         _username = settings.Username ?? string.Empty;
+        _selectedAuthMethod = string.Equals(settings.AuthMethod, AppSettings.PasswordAuthMethod, StringComparison.OrdinalIgnoreCase)
+            ? JellyfinAuthMethod.UsernamePassword
+            : JellyfinAuthMethod.ApiKey;
 
         TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync, () => !IsBusy);
         RefreshMediaCommand = new AsyncRelayCommand(RefreshMediaAsync, () => !IsBusy && IsAuthenticated);
@@ -145,6 +155,27 @@ public sealed class MainViewModel : ViewModelBase
         get => _username;
         set => SetProperty(ref _username, value);
     }
+
+    public JellyfinAuthMethod SelectedAuthMethod
+    {
+        get => _selectedAuthMethod;
+        set
+        {
+            if (SetProperty(ref _selectedAuthMethod, value))
+            {
+                var settings = _settingsService.Current;
+                settings.AuthMethod = value == JellyfinAuthMethod.UsernamePassword
+                    ? AppSettings.PasswordAuthMethod
+                    : AppSettings.ApiKeyAuthMethod;
+                _settingsService.Save(settings);
+                OnPropertyChanged(nameof(IsApiKeyAuthSelected));
+                OnPropertyChanged(nameof(IsPasswordAuthSelected));
+            }
+        }
+    }
+
+    public bool IsApiKeyAuthSelected => SelectedAuthMethod == JellyfinAuthMethod.ApiKey;
+    public bool IsPasswordAuthSelected => SelectedAuthMethod == JellyfinAuthMethod.UsernamePassword;
 
     public string ConnectionStatus
     {
@@ -379,6 +410,41 @@ public sealed class MainViewModel : ViewModelBase
         }
     }
 
+    public async Task<bool> LoginWithApiKeyAsync(string apiKey)
+    {
+        IsBusy = true;
+        ErrorMessage = string.Empty;
+
+        try
+        {
+            var session = await _authService.LoginWithApiKeyAsync(ServerUrl, apiKey);
+            ApplySessionState(session);
+            await LoadMediaItemsInternalAsync();
+            if (MediaItems.Count > 0 && !IsSlideshowRunning)
+            {
+                await _slideshowService.StartAsync();
+            }
+
+            return true;
+        }
+        catch (JellyfinApiException ex)
+        {
+            ErrorMessage = ex.Message;
+            ConnectionStatus = "خطا در اتصال";
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("خطای غیرمنتظره هنگام اتصال با کلید API.", ex);
+            ErrorMessage = "خطای غیرمنتظره هنگام اتصال با کلید API رخ داد.";
+            return false;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     public async Task<bool> LoginAsync(string password)
     {
         IsBusy = true;
@@ -419,6 +485,12 @@ public sealed class MainViewModel : ViewModelBase
         var settings = _settingsService.Current;
         ServerUrl = settings.ServerUrl;
         Username = settings.Username ?? string.Empty;
+        _selectedAuthMethod = string.Equals(settings.AuthMethod, AppSettings.PasswordAuthMethod, StringComparison.OrdinalIgnoreCase)
+            ? JellyfinAuthMethod.UsernamePassword
+            : JellyfinAuthMethod.ApiKey;
+        OnPropertyChanged(nameof(SelectedAuthMethod));
+        OnPropertyChanged(nameof(IsApiKeyAuthSelected));
+        OnPropertyChanged(nameof(IsPasswordAuthSelected));
         ApplySessionState(_authService.CurrentSession);
         IsOverlayVisible = _overlayService.IsVisible;
         RefreshCacheSummary();
@@ -785,7 +857,9 @@ public sealed class MainViewModel : ViewModelBase
     private void ApplySessionState(ConnectionSessionState session)
     {
         IsAuthenticated = session.IsAuthenticated;
-        ConnectionStatus = session.IsAuthenticated ? $"متصل ({session.Username})" : "متصل نیست";
+        ConnectionStatus = session.IsAuthenticated
+            ? (session.IsApiKeySession ? "متصل (کلید API)" : $"متصل ({session.Username})")
+            : "متصل نیست";
         ServerDetails = string.IsNullOrWhiteSpace(session.ServerName)
             ? string.Empty
             : $"{session.ServerName} — نسخه {session.ServerVersion}";

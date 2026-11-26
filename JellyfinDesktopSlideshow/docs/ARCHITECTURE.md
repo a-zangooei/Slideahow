@@ -35,13 +35,13 @@ JellyfinDesktopSlideshow/
 
 1. **احراز هویت (`AuthenticationService` + `JellyfinClient` + `SecureStorageService`):**
    - تست اتصال: `GET /System/Info/Public` برای دریافت نام، نسخه و `ServerId`.
-   - ورود: `POST /Users/AuthenticateByName` با هدر `Authorization: MediaBrowser Client="...", Device="...", DeviceId="...", Version="..."`.
-   - توکن دریافت‌شده **هرگز** در `settings.json` یا لاگ‌ها نوشته نمی‌شود؛ فقط از طریق `CredWriteW` در **Windows Credential Manager** با کلید `JellyfinDesktopSlideshow:AccessToken` ذخیره می‌شود.
-   - هنگام شروع برنامه، `TryRestoreSessionAsync()` توکن را از Credential Manager خوانده و با `GET /Users/Me` اعتبار آن را می‌سنجد.
+   - **روش اصلی — کلید API (`ApiKey`):** کلید ساخته‌شده در مسیر `Dashboard -> Advanced -> API Keys` فقط در هدر استاندارد `Authorization: MediaBrowser Client="...", Device="...", DeviceId="...", Version="...", Token="..."` ارسال می‌شود (بدون `?api_key` یا `?ApiKey=` در QueryString و بدون استفاده از هدرهای منسوخ‌شدهٔ `X-Emby-Token` / `X-MediaBrowser-Token`). اعتبارسنجی کلید از طریق `GET /System/Info` انجام می‌شود (زیرا مسیر کاربرمحور `/Users/Me` با کلید API سرور پاسخ خطا برمی‌گرداند).
+   - **روش جایگزین — نام کاربری و رمز عبور (`AuthenticateByName`):** ورود با `POST /Users/AuthenticateByName` و هدر `Authorization: MediaBrowser ...` و اعتبارسنجی نشست با `GET /Users/Me`.
+   - کلید API یا توکن دریافت‌شده **هرگز** در `settings.json` یا لاگ‌ها نوشته نمی‌شود؛ فقط از طریق `CredWriteW` در **Windows Credential Manager** با کلید `JellyfinDesktopSlideshow:AccessToken` ذخیره می‌شود. هنگام خروج در حالت کلید API فقط حافظهٔ امن محلی پاک می‌شود و `POST /Sessions/Logout` فراخوانی نمی‌گردد.
 
 2. **دریافت کتابخانه‌ها و رسانه‌ها (`LibraryService`):**
-   - دریافت کتابخانه‌های مجاز کاربر از `GET /Users/{userId}/Views` (و در صورت خطای `404` روی برخی نسخه‌ها، fallback خودکار به `GET /UserViews?userId={userId}`).
-   - دریافت صفحهٔ اول و صفحات بعدی فیلم‌ها/سریال‌ها از `GET /Users/{userId}/Items` با `Recursive=true` و `Fields=ProductionYear,BackdropImageTags`.
+   - در حالت **کلید API**: دریافت کتابخانه‌ها از `GET /Library/MediaFolders` و دریافت رسانه‌ها از `GET /Items` با `Recursive=true` و `Fields=ProductionYear,BackdropImageTags`.
+   - در حالت **نام کاربری و رمز عبور**: دریافت کتابخانه‌های مجاز کاربر از `GET /Users/{userId}/Views` (با fallback خودکار `404` به `GET /UserViews?userId={userId}`) و دریافت رسانه‌ها از `GET /Users/{userId}/Items`.
 
 3. **دریافت و کش تصاویر (`ImageService` + `CacheService` + `ImageFormatValidator` + `ImageAspectFilter`):**
    - تصویر Backdrop از `GET /Items/{itemId}/Images/Backdrop/{index}?maxWidth=1920&quality=92&tag=...` با هدر `Authorization: MediaBrowser` دانلود می‌شود (بدون `api_key` در QueryString).

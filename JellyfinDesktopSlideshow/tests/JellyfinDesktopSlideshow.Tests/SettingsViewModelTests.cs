@@ -39,6 +39,15 @@ public sealed class SettingsViewModelTests : IDisposable
             settingsService,
             logger);
 
+        // Section 1: AuthMethod defaults to ApiKey as primary and switches cleanly
+        Assert.Equal(JellyfinAuthMethod.ApiKey, vm.SelectedAuthMethod);
+        Assert.True(vm.IsApiKeyAuthSelected);
+        Assert.False(vm.IsPasswordAuthSelected);
+        vm.SelectedAuthMethod = JellyfinAuthMethod.UsernamePassword;
+        Assert.False(vm.IsApiKeyAuthSelected);
+        Assert.True(vm.IsPasswordAuthSelected);
+        Assert.Equal(AppSettings.PasswordAuthMethod, settingsService.Current.AuthMethod);
+
         // Section 3: Slideshow & Wallpaper
         vm.SlideshowIntervalSeconds = 1; // clamped to min 5
         Assert.Equal(5, vm.SlideshowIntervalSeconds);
@@ -309,6 +318,7 @@ public sealed class SettingsViewModelTests : IDisposable
     {
         public ConnectionSessionState CurrentSession { get; } = new() { IsAuthenticated = false };
         public Task<ServerPublicInfo> TestConnectionAsync(string serverUrl, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<ConnectionSessionState> LoginWithApiKeyAsync(string serverUrl, string apiKey, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ConnectionSessionState> LoginAsync(string serverUrl, string username, string password, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ConnectionSessionState> TryRestoreSessionAsync(CancellationToken cancellationToken = default) => Task.FromResult(CurrentSession);
         public Task LogoutAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
