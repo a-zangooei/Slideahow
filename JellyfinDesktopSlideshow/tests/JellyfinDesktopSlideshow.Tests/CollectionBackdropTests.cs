@@ -1,6 +1,7 @@
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using JellyfinDesktopSlideshow.Infrastructure;
 using JellyfinDesktopSlideshow.Models;
 using JellyfinDesktopSlideshow.Services;
 using Xunit;
