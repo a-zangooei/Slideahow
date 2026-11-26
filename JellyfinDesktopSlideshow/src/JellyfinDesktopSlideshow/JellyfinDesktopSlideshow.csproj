@@ -8,4 +8,8 @@
     <ApplicationTitle>Jellyfin Desktop Slideshow</ApplicationTitle>
     <Version>1.0.0</Version>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="JellyfinDesktopSlideshow.Tests" />
+  </ItemGroup>
 </Project>

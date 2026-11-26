@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO;
 using JellyfinDesktopSlideshow.Infrastructure;
 using Xunit;
@@ -70,27 +71,37 @@ public sealed class DesktopShortcutServiceTests : IDisposable
     public void BuildMultiSizePngIco_GeneratesValidMultiEntryIcoHeaderWithPngPayloads()
     {
         var icoBytes = WindowsDesktopShortcutAdapter.BuildMultiSizePngIco([48, 128]);
+        ReadOnlySpan<byte> span = icoBytes;
 
         Assert.True(icoBytes.Length > 200);
         // Reserved = 0, Type = 1 (ICO), Count = 2
-        Assert.Equal(0, icoBytes[0]);
-        Assert.Equal(0, icoBytes[1]);
-        Assert.Equal(1, icoBytes[2]);
-        Assert.Equal(0, icoBytes[3]);
-        Assert.Equal(2, icoBytes[4]);
-        Assert.Equal(0, icoBytes[5]);
+        Assert.Equal(0, (int)BinaryPrimitives.ReadUInt16LittleEndian(span[0..2]));
+        Assert.Equal(1, (int)BinaryPrimitives.ReadUInt16LittleEndian(span[2..4]));
+        Assert.Equal(2, (int)BinaryPrimitives.ReadUInt16LittleEndian(span[4..6]));
 
-        // Entry 1 dimensions = 48x48, Entry 2 dimensions = 128x128
+        // Entry 1 (48x48)
         Assert.Equal(48, icoBytes[6]);
         Assert.Equal(48, icoBytes[7]);
+        Assert.Equal(32, (int)BinaryPrimitives.ReadUInt16LittleEndian(span[12..14]));
+        var entry1Size = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(span[14..18]));
+        var entry1Offset = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(span[18..22]));
+        Assert.True(entry1Size > 100);
+        Assert.Equal(6 + (2 * 16), entry1Offset);
+
+        // Entry 2 (128x128)
         Assert.Equal(128, icoBytes[22]);
         Assert.Equal(128, icoBytes[23]);
+        Assert.Equal(32, (int)BinaryPrimitives.ReadUInt16LittleEndian(span[28..30]));
+        var entry2Size = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(span[30..34]));
+        var entry2Offset = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(span[34..38]));
+        Assert.True(entry2Size > 100);
+        Assert.Equal(entry1Offset + entry1Size, entry2Offset);
+        Assert.Equal(icoBytes.Length, entry2Offset + entry2Size);
 
-        // First PNG starts right after 6 + 2*16 = 38 bytes
-        Assert.Equal(0x89, icoBytes[38]);
-        Assert.Equal((byte)'P', icoBytes[39]);
-        Assert.Equal((byte)'N', icoBytes[40]);
-        Assert.Equal((byte)'G', icoBytes[41]);
+        // Both payloads must begin with the standard 8-byte PNG signature
+        byte[] expectedPngSignature = [0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A];
+        Assert.Equal(expectedPngSignature, icoBytes.AsSpan(entry1Offset, 8).ToArray());
+        Assert.Equal(expectedPngSignature, icoBytes.AsSpan(entry2Offset, 8).ToArray());
     }
 
     public void Dispose()
