@@ -15,6 +15,8 @@ public sealed class OverlayService : IOverlayService
 
     public bool IsVisible => _window is { IsVisible: true };
 
+    public event EventHandler? StateUpdated;
+
     public OverlayService(
         OverlayViewModel viewModel,
         ISettingsService settingsService,
@@ -27,6 +29,8 @@ public sealed class OverlayService : IOverlayService
         _logger = logger;
 
         _viewModel.LaunchCompleted += OnLaunchCompleted;
+        _viewModel.DesktopShortcutCompleted += OnDesktopShortcutCompleted;
+        _viewModel.HideOverlayRequested += OnHideOverlayRequested;
     }
 
     public void Show()
@@ -71,6 +75,8 @@ public sealed class OverlayService : IOverlayService
     public void Close()
     {
         _viewModel.LaunchCompleted -= OnLaunchCompleted;
+        _viewModel.DesktopShortcutCompleted -= OnDesktopShortcutCompleted;
+        _viewModel.HideOverlayRequested -= OnHideOverlayRequested;
         if (_window is not null)
         {
             _window.Close();
@@ -79,34 +85,34 @@ public sealed class OverlayService : IOverlayService
     }
 
     private void OnLaunchCompleted(object? sender, ItemLaunchResult result)
+        => LaunchResultDialogHelper.HandleFailure(result, _itemLauncher, _logger, "آیکون شناور");
+
+    private void OnDesktopShortcutCompleted(object? sender, DesktopShortcutUpdateResult result)
     {
-        if (result.Succeeded)
-        {
-            return;
-        }
-
-        _logger.Warning($"باز کردن عنوان از آیکون شناور ناموفق بود: {result.Message}");
-
-        if (result.CanFallbackToBrowser && !string.IsNullOrWhiteSpace(result.FallbackBrowserUrl))
-        {
-            var answer = MessageBox.Show(
-                $"{result.Message}\n\nآیا می‌خواهید این عنوان در مرورگر پیش‌فرض باز شود؟",
-                "Jellyfin Desktop Slideshow",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Information);
-
-            if (answer == MessageBoxResult.Yes)
-            {
-                _itemLauncher.OpenValidatedBrowserUrl(result.FallbackBrowserUrl);
-            }
-        }
-        else
+        if (!result.Succeeded)
         {
             MessageBox.Show(
                 result.Message,
                 "Jellyfin Desktop Slideshow",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
+            return;
         }
+
+        StateUpdated?.Invoke(this, EventArgs.Empty);
+        MessageBox.Show(
+            result.Message,
+            "Jellyfin Desktop Slideshow",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private void OnHideOverlayRequested(object? sender, EventArgs e)
+    {
+        Hide();
+        var settings = _settingsService.Current;
+        settings.ShowOverlayIcon = false;
+        _settingsService.Save(settings);
+        StateUpdated?.Invoke(this, EventArgs.Empty);
     }
 }

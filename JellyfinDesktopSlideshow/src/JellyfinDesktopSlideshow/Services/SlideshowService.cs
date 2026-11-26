@@ -12,6 +12,7 @@ public sealed class SlideshowService : ISlideshowService
     private readonly ISettingsService _settingsService;
     private readonly ISlideshowTimer _timer;
     private readonly ILoggingService _logger;
+    private readonly ICurrentWallpaperItemStore? _currentItemStore;
     private readonly SemaphoreSlim _transitionGate = new(1, 1);
 
     private readonly List<MediaItem> _items = [];
@@ -30,12 +31,14 @@ public sealed class SlideshowService : ISlideshowService
         IImageService imageService,
         ISettingsService settingsService,
         ISlideshowTimer timer,
-        ILoggingService logger)
+        ILoggingService logger,
+        ICurrentWallpaperItemStore? currentItemStore = null)
     {
         _imageService = imageService;
         _settingsService = settingsService;
         _timer = timer;
         _logger = logger;
+        _currentItemStore = currentItemStore;
 
         _timer.Interval = GetConfiguredInterval();
         _timer.Tick += OnTimerTick;
@@ -514,6 +517,11 @@ public sealed class SlideshowService : ISlideshowService
     private void PublishState(SlideshowState state)
     {
         CurrentState = state;
+        if (state.CurrentItem is not null && !string.IsNullOrWhiteSpace(state.CurrentImagePath))
+        {
+            _currentItemStore?.Save(state.CurrentItem);
+        }
+
         StateChanged?.Invoke(this, state);
     }
 }

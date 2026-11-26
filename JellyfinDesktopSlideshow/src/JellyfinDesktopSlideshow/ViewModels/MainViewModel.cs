@@ -17,6 +17,8 @@ public sealed class MainViewModel : ViewModelBase
     private readonly IOverlayService _overlayService;
     private readonly ISettingsService _settingsService;
     private readonly ILoggingService _logger;
+    private readonly IDesktopShortcutService? _desktopShortcutService;
+    private readonly ICurrentItemLaunchCoordinator? _launchCoordinator;
 
     private CancellationTokenSource? _previewCts;
     private bool _initialized;
@@ -55,6 +57,7 @@ public sealed class MainViewModel : ViewModelBase
     public AsyncRelayCommand PreviousSlideCommand { get; }
     public AsyncRelayCommand ApplyCurrentWallpaperCommand { get; }
     public AsyncRelayCommand OpenCurrentItemCommand { get; }
+    public AsyncRelayCommand CreateOrUpdateDesktopShortcutCommand { get; }
     public AsyncRelayCommand OpenFallbackBrowserCommand { get; }
     public AsyncRelayCommand ToggleOverlayCommand { get; }
     public AsyncRelayCommand OpenSettingsCommand { get; }
@@ -64,6 +67,7 @@ public sealed class MainViewModel : ViewModelBase
     public event EventHandler? OpenSettingsRequested;
     public event EventHandler? MinimizeToTrayRequested;
     public event EventHandler? ExitApplicationRequested;
+    public event EventHandler? DesktopShortcutSynchronized;
 
     public MainViewModel(
         IAuthenticationService authService,
@@ -75,7 +79,9 @@ public sealed class MainViewModel : ViewModelBase
         IItemLauncher itemLauncher,
         IOverlayService overlayService,
         ISettingsService settingsService,
-        ILoggingService logger)
+        ILoggingService logger,
+        IDesktopShortcutService? desktopShortcutService = null,
+        ICurrentItemLaunchCoordinator? launchCoordinator = null)
     {
         _authService = authService;
         _libraryService = libraryService;
@@ -87,6 +93,8 @@ public sealed class MainViewModel : ViewModelBase
         _overlayService = overlayService;
         _settingsService = settingsService;
         _logger = logger;
+        _desktopShortcutService = desktopShortcutService;
+        _launchCoordinator = launchCoordinator;
 
         var settings = _settingsService.Load();
         _serverUrl = settings.ServerUrl;
@@ -100,6 +108,9 @@ public sealed class MainViewModel : ViewModelBase
         PreviousSlideCommand = new AsyncRelayCommand(() => _slideshowService.PreviousAsync(), () => CanGoPrevious && !IsBusy);
         ApplyCurrentWallpaperCommand = new AsyncRelayCommand(ApplyCurrentWallpaperAsync, () => !string.IsNullOrWhiteSpace(PreviewImagePath));
         OpenCurrentItemCommand = new AsyncRelayCommand(OpenCurrentItemAsync, () => ResolveCurrentActionItem() is not null && !IsBusy);
+        CreateOrUpdateDesktopShortcutCommand = new AsyncRelayCommand(
+            CreateOrUpdateDesktopShortcutAsync,
+            () => _desktopShortcutService is not null && !IsBusy);
         OpenFallbackBrowserCommand = new AsyncRelayCommand(OpenFallbackBrowserAsync, () => HasPendingFallbackBrowserUrl);
         ToggleOverlayCommand = new AsyncRelayCommand(ToggleOverlayAsync);
         OpenSettingsCommand = new AsyncRelayCommand(() =>
@@ -594,19 +605,48 @@ public sealed class MainViewModel : ViewModelBase
         var item = ResolveCurrentActionItem();
         if (item is null)
         {
+            LaunchStatus = CurrentItemLaunchCoordinator.MissingItemErrorMessage;
             return;
         }
 
         PendingFallbackBrowserUrl = null;
         LaunchStatus = $"در حال باز کردن «{item.Name}»...";
 
-        var result = await _itemLauncher.OpenItemAsync(item);
+        var result = _launchCoordinator is not null
+            ? await _launchCoordinator.LaunchCurrentItemAsync(item)
+            : await _itemLauncher.OpenItemAsync(item);
         LaunchStatus = result.Message;
 
         if (!result.Succeeded && result.CanFallbackToBrowser && !string.IsNullOrWhiteSpace(result.FallbackBrowserUrl))
         {
             PendingFallbackBrowserUrl = result.FallbackBrowserUrl;
         }
+    }
+
+    private Task CreateOrUpdateDesktopShortcutAsync()
+    {
+        if (_desktopShortcutService is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        ErrorMessage = string.Empty;
+        var result = _desktopShortcutService.CreateOrUpdateShortcut();
+        if (result.Succeeded)
+        {
+            var settings = _settingsService.Current;
+            settings.ShowDesktopShortcutIcon = true;
+            _settingsService.Save(settings);
+            LaunchStatus = result.Message;
+            DesktopShortcutSynchronized?.Invoke(this, EventArgs.Empty);
+        }
+        else
+        {
+            ErrorMessage = result.Message;
+            LaunchStatus = result.Message;
+        }
+
+        return Task.CompletedTask;
     }
 
     private Task OpenFallbackBrowserAsync()
@@ -645,6 +685,7 @@ public sealed class MainViewModel : ViewModelBase
 
         _settingsService.Save(settings);
         IsOverlayVisible = _overlayService.IsVisible;
+        DesktopShortcutSynchronized?.Invoke(this, EventArgs.Empty);
         return Task.CompletedTask;
     }
 
@@ -693,7 +734,14 @@ public sealed class MainViewModel : ViewModelBase
             return;
         }
 
+        var itemToRecord = SelectedMediaItem ?? _slideshowService.CurrentState.CurrentItem;
+        if (itemToRecord is not null)
+        {
+            _launchCoordinator?.RecordDisplayedItem(itemToRecord);
+        }
+
         await ApplyWallpaperSafeAsync(PreviewImagePath);
+        OpenCurrentItemCommand.RaiseCanExecuteChanged();
     }
 
     private async Task ApplyWallpaperSafeAsync(string path)
@@ -712,7 +760,9 @@ public sealed class MainViewModel : ViewModelBase
     }
 
     private MediaItem? ResolveCurrentActionItem()
-        => _slideshowService.CurrentState.CurrentItem ?? SelectedMediaItem;
+        => _launchCoordinator?.ResolveCurrentItem(SelectedMediaItem)
+           ?? _slideshowService.CurrentState.CurrentItem
+           ?? SelectedMediaItem;
 
     private void CancelPendingPreview()
     {
@@ -764,6 +814,7 @@ public sealed class MainViewModel : ViewModelBase
         PreviousSlideCommand.RaiseCanExecuteChanged();
         ApplyCurrentWallpaperCommand.RaiseCanExecuteChanged();
         OpenCurrentItemCommand.RaiseCanExecuteChanged();
+        CreateOrUpdateDesktopShortcutCommand.RaiseCanExecuteChanged();
         OpenFallbackBrowserCommand.RaiseCanExecuteChanged();
         ToggleOverlayCommand.RaiseCanExecuteChanged();
     }

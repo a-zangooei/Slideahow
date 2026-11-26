@@ -146,6 +146,16 @@
                               GridLinesVisibility="Horizontal"
                               HeadersVisibility="Column"
                               BorderBrush="#E2E8F0">
+                        <DataGrid.ContextMenu>
+                            <ContextMenu FlowDirection="RightToLeft">
+                                <MenuItem Header="باز کردن عنوان انتخاب‌شده / فعلی در Jellyfin"
+                                          Command="{Binding PlacementTarget.DataContext.OpenCurrentItemCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="ساخت / به‌روزرسانی میان‌بُر دسکتاپ"
+                                          Command="{Binding PlacementTarget.DataContext.CreateOrUpdateDesktopShortcutCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <MenuItem Header="اعمال تصویر به‌عنوان والپیپر"
+                                          Command="{Binding PlacementTarget.DataContext.ApplyCurrentWallpaperCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="نام عنوان" Binding="{Binding Name}" Width="2*" />
                             <DataGridTextColumn Header="نوع" Binding="{Binding Type}" Width="75" />
@@ -190,6 +200,10 @@
                                     Command="{Binding OpenCurrentItemCommand}"
                                     Padding="12,6"
                                     FontWeight="SemiBold"
+                                    Margin="0,0,6,4" />
+                            <Button Content="ساخت میان‌بُر دسکتاپ"
+                                    Command="{Binding CreateOrUpdateDesktopShortcutCommand}"
+                                    Padding="12,6"
                                     Margin="0,0,6,4" />
                             <Button Content="اعمال روی والپیپر"
                                     Command="{Binding ApplyCurrentWallpaperCommand}"

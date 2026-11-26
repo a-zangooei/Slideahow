@@ -104,6 +104,87 @@ public sealed class DesktopShortcutServiceTests : IDisposable
         Assert.Equal(expectedPngSignature, icoBytes.AsSpan(entry2Offset, 8).ToArray());
     }
 
+    [Fact]
+    public void CreateOrUpdateShortcut_WhenCalledRepeatedly_UpdatesInPlaceWithoutDuplicates()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var desktopDir = Path.Combine(_tempDir, "Desktop");
+        var iconPath = Path.Combine(_tempDir, "icons", "jellyfin.ico");
+        var adapter = new FakeDesktopShortcutAdapter(desktopDir);
+        var exeVersion = @"C:\App\v1\JellyfinDesktopSlideshow.exe";
+
+        var service = new DesktopShortcutService(
+            adapter,
+            new NullLoggingService(),
+            () => exeVersion,
+            iconPath);
+
+        var first = service.CreateOrUpdateShortcut();
+        Assert.True(first.Succeeded);
+        Assert.False(first.AlreadyExisted);
+        Assert.Equal(1, adapter.ShortcutCount);
+
+        exeVersion = @"C:\App\v2\JellyfinDesktopSlideshow.exe";
+        var second = service.CreateOrUpdateShortcut();
+
+        Assert.True(second.Succeeded);
+        Assert.True(second.AlreadyExisted);
+        Assert.Equal(1, adapter.ShortcutCount);
+        Assert.Equal(first.ShortcutPath, second.ShortcutPath);
+        Assert.Equal(@"C:\App\v2\JellyfinDesktopSlideshow.exe", adapter.LastTargetExePath);
+        Assert.Equal(DesktopShortcutService.OpenCurrentArgument, adapter.LastArguments);
+        Assert.Equal(DesktopShortcutService.ShortcutDescription, adapter.LastDescription);
+        Assert.Equal(iconPath, adapter.LastIconPath);
+    }
+
+    [Fact]
+    public void CreateOrUpdateShortcut_WhenIconMissingOrGenerationFails_ReturnsClearError()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var desktopDir = Path.Combine(_tempDir, "Desktop");
+        var adapter = new FakeDesktopShortcutAdapter(desktopDir)
+        {
+            IconOverride = string.Empty
+        };
+
+        var service = new DesktopShortcutService(
+            adapter,
+            new NullLoggingService(),
+            () => @"C:\Apps\JellyfinDesktopSlideshow.exe",
+            Path.Combine(_tempDir, "icons", "missing.ico"));
+
+        var result = service.CreateOrUpdateShortcut();
+
+        Assert.False(result.Succeeded);
+        Assert.False(string.IsNullOrWhiteSpace(result.Message));
+        Assert.Equal(0, adapter.CreateCalls);
+        Assert.False(service.IsShortcutPresent());
+
+        adapter.ThrowOnEnsureIcon = true;
+        var exceptionResult = service.CreateOrUpdateShortcut();
+        Assert.False(exceptionResult.Succeeded);
+        Assert.Contains("ناموفق", exceptionResult.Message);
+    }
+
+    [Fact]
+    public void EnsureDesktopIconFile_RegeneratesCorruptIconAndLeavesNoTempFiles()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var iconPath = Path.Combine(_tempDir, "icons", "jellyfin-desktop.ico");
+        Directory.CreateDirectory(Path.GetDirectoryName(iconPath)!);
+
+        // Write corrupt non-ICO payload larger than 128 bytes
+        File.WriteAllBytes(iconPath, Enumerable.Repeat((byte)0x41, 256).ToArray());
+        Assert.False(WindowsDesktopShortcutAdapter.IsValidIcoFile(iconPath));
+
+        var adapter = new WindowsDesktopShortcutAdapter();
+        var returnedPath = adapter.EnsureDesktopIconFile(iconPath);
+
+        Assert.Equal(iconPath, returnedPath);
+        Assert.True(WindowsDesktopShortcutAdapter.IsValidIcoFile(iconPath));
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(iconPath)!, "*.tmp"));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))
@@ -123,10 +204,14 @@ public sealed class DesktopShortcutServiceTests : IDisposable
         }
 
         public int CreateCalls { get; private set; }
+        public int ShortcutCount => _shortcuts.Count;
         public string? LastShortcutPath { get; private set; }
         public string? LastTargetExePath { get; private set; }
         public string? LastArguments { get; private set; }
+        public string? LastDescription { get; private set; }
         public string? LastIconPath { get; private set; }
+        public string? IconOverride { get; set; }
+        public bool ThrowOnEnsureIcon { get; set; }
 
         public string GetDesktopDirectory() => _desktopDir;
 
@@ -143,12 +228,21 @@ public sealed class DesktopShortcutServiceTests : IDisposable
             LastShortcutPath = shortcutPath;
             LastTargetExePath = targetExePath;
             LastArguments = arguments;
+            LastDescription = description;
             LastIconPath = iconPath;
             _shortcuts.Add(shortcutPath);
         }
 
         public void DeleteShortcut(string shortcutPath) => _shortcuts.Remove(shortcutPath);
 
-        public string EnsureDesktopIconFile(string iconPath) => iconPath;
+        public string EnsureDesktopIconFile(string iconPath)
+        {
+            if (ThrowOnEnsureIcon)
+            {
+                throw new IOException("Disk write denied");
+            }
+
+            return IconOverride ?? iconPath;
+        }
     }
 }

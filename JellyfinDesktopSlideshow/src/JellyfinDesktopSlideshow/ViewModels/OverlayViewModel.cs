@@ -10,6 +10,8 @@ public sealed class OverlayViewModel : ViewModelBase
     private readonly IItemLauncher _itemLauncher;
     private readonly ISettingsService _settingsService;
     private readonly ILoggingService _logger;
+    private readonly IDesktopShortcutService? _desktopShortcutService;
+    private readonly ICurrentItemLaunchCoordinator? _launchCoordinator;
 
     private MediaItem? _currentItem;
     private double _overlaySize = 44;
@@ -17,23 +19,48 @@ public sealed class OverlayViewModel : ViewModelBase
     private string _toolTipText = "Jellyfin Desktop Slideshow — عنوانی در حال نمایش نیست";
 
     public AsyncRelayCommand OpenCurrentItemCommand { get; }
+    public AsyncRelayCommand CreateOrUpdateDesktopShortcutCommand { get; }
+    public AsyncRelayCommand HideOverlayCommand { get; }
 
     public event EventHandler<ItemLaunchResult>? LaunchCompleted;
+    public event EventHandler<DesktopShortcutUpdateResult>? DesktopShortcutCompleted;
+    public event EventHandler? HideOverlayRequested;
 
     public OverlayViewModel(
         ISlideshowService slideshowService,
         IItemLauncher itemLauncher,
         ISettingsService settingsService,
-        ILoggingService logger)
+        ILoggingService logger,
+        IDesktopShortcutService? desktopShortcutService = null,
+        ICurrentItemLaunchCoordinator? launchCoordinator = null)
     {
         _slideshowService = slideshowService;
         _itemLauncher = itemLauncher;
         _settingsService = settingsService;
         _logger = logger;
+        _desktopShortcutService = desktopShortcutService;
+        _launchCoordinator = launchCoordinator;
 
         ApplyAppearanceFromSettings();
-        OpenCurrentItemCommand = new AsyncRelayCommand(OpenCurrentItemAsync, () => CurrentItem is not null);
+        OpenCurrentItemCommand = new AsyncRelayCommand(OpenCurrentItemAsync, () => ResolveEffectiveItem() is not null);
+        CreateOrUpdateDesktopShortcutCommand = new AsyncRelayCommand(
+            CreateOrUpdateDesktopShortcutAsync,
+            () => _desktopShortcutService is not null);
+        HideOverlayCommand = new AsyncRelayCommand(() =>
+        {
+            HideOverlayRequested?.Invoke(this, EventArgs.Empty);
+            return Task.CompletedTask;
+        });
+
         _slideshowService.StateChanged += OnSlideshowStateChanged;
+
+        var initialItem = _launchCoordinator?.ResolveCurrentItem(_slideshowService.CurrentState.CurrentItem);
+        if (initialItem is not null)
+        {
+            _currentItem = initialItem;
+            UpdateToolTip(initialItem);
+            OpenCurrentItemCommand.RaiseCanExecuteChanged();
+        }
     }
 
     public MediaItem? CurrentItem
@@ -49,7 +76,7 @@ public sealed class OverlayViewModel : ViewModelBase
         }
     }
 
-    public bool HasCurrentItem => CurrentItem is not null;
+    public bool HasCurrentItem => ResolveEffectiveItem() is not null;
 
     public double OverlaySize
     {
@@ -76,24 +103,33 @@ public sealed class OverlayViewModel : ViewModelBase
         OverlayOpacity = Math.Clamp(settings.OverlayOpacity, 0.2, 1.0);
     }
 
+    private MediaItem? ResolveEffectiveItem()
+        => _currentItem ?? _launchCoordinator?.ResolveCurrentItem();
+
     private void OnSlideshowStateChanged(object? sender, SlideshowState state)
     {
-        CurrentItem = state.CurrentItem;
-        if (state.CurrentItem is null)
+        var resolved = state.CurrentItem ?? _launchCoordinator?.ResolveCurrentItem();
+        CurrentItem = resolved;
+        UpdateToolTip(resolved);
+    }
+
+    private void UpdateToolTip(MediaItem? item)
+    {
+        if (item is null)
         {
             ToolTipText = "Jellyfin Desktop Slideshow — عنوانی در حال نمایش نیست";
             return;
         }
 
-        var yearSuffix = state.CurrentItem.ProductionYear.HasValue
-            ? $" ({state.CurrentItem.ProductionYear})"
+        var yearSuffix = item.ProductionYear.HasValue
+            ? $" ({item.ProductionYear})"
             : string.Empty;
-        ToolTipText = $"باز کردن: {state.CurrentItem.Name}{yearSuffix}";
+        ToolTipText = $"باز کردن: {item.Name}{yearSuffix}";
     }
 
     private async Task OpenCurrentItemAsync()
     {
-        var item = CurrentItem;
+        var item = ResolveEffectiveItem();
         if (item is null)
         {
             return;
@@ -101,7 +137,9 @@ public sealed class OverlayViewModel : ViewModelBase
 
         try
         {
-            var result = await _itemLauncher.OpenItemAsync(item);
+            var result = _launchCoordinator is not null
+                ? await _launchCoordinator.LaunchCurrentItemAsync(item)
+                : await _itemLauncher.OpenItemAsync(item);
             LaunchCompleted?.Invoke(this, result);
         }
         catch (Exception ex)
@@ -109,5 +147,24 @@ public sealed class OverlayViewModel : ViewModelBase
             _logger.Error($"خطا در باز کردن عنوان {item.Name} از آیکون شناور.", ex);
             LaunchCompleted?.Invoke(this, new ItemLaunchResult(false, "خطای غیرمنتظره هنگام باز کردن عنوان رخ داد."));
         }
+    }
+
+    private Task CreateOrUpdateDesktopShortcutAsync()
+    {
+        if (_desktopShortcutService is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var result = _desktopShortcutService.CreateOrUpdateShortcut();
+        if (result.Succeeded)
+        {
+            var settings = _settingsService.Current;
+            settings.ShowDesktopShortcutIcon = true;
+            _settingsService.Save(settings);
+        }
+
+        DesktopShortcutCompleted?.Invoke(this, result);
+        return Task.CompletedTask;
     }
 }

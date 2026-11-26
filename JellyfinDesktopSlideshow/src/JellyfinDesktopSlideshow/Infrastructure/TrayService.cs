@@ -43,6 +43,7 @@ public sealed class TrayService : ITrayService
     public event EventHandler? TogglePauseRequested;
     public event EventHandler? NextSlideRequested;
     public event EventHandler? OpenCurrentItemRequested;
+    public event EventHandler? CreateDesktopShortcutRequested;
     public event EventHandler? ExitApplicationRequested;
 
     public TrayService(ILoggingService logger)
@@ -146,6 +147,9 @@ public sealed class TrayService : ITrayService
         };
         _openCurrentItemMenu.Click += (_, _) => OpenCurrentItemRequested?.Invoke(this, EventArgs.Empty);
 
+        var desktopShortcutItem = new MenuItem { Header = "ساخت / به‌روزرسانی میان‌بُر دسکتاپ" };
+        desktopShortcutItem.Click += (_, _) => CreateDesktopShortcutRequested?.Invoke(this, EventArgs.Empty);
+
         var exitItem = new MenuItem { Header = "خروج کامل" };
         exitItem.Click += (_, _) => ExitApplicationRequested?.Invoke(this, EventArgs.Empty);
 
@@ -159,6 +163,7 @@ public sealed class TrayService : ITrayService
         _contextMenu.Items.Add(_pauseResumeItem);
         _contextMenu.Items.Add(nextItem);
         _contextMenu.Items.Add(_openCurrentItemMenu);
+        _contextMenu.Items.Add(desktopShortcutItem);
         _contextMenu.Items.Add(new Separator());
         _contextMenu.Items.Add(exitItem);
     }

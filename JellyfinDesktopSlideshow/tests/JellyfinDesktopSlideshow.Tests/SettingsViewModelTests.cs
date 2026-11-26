@@ -256,6 +256,13 @@ public sealed class SettingsViewModelTests : IDisposable
         public bool IsPresent { get; private set; }
         public string ShortcutFilePath => @"C:\Desktop\باز کردن در Jellyfin.lnk";
         public bool IsShortcutPresent() => IsPresent;
+        public DesktopShortcutUpdateResult CreateOrUpdateShortcut()
+        {
+            var alreadyExisted = IsPresent;
+            IsPresent = true;
+            return new DesktopShortcutUpdateResult(true, alreadyExisted, ShortcutFilePath, "OK");
+        }
+
         public bool SetShortcutEnabled(bool enabled)
         {
             IsPresent = enabled;

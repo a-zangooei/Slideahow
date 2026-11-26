@@ -1,9 +1,16 @@
 namespace JellyfinDesktopSlideshow.Infrastructure;
 
+public sealed record DesktopShortcutUpdateResult(
+    bool Succeeded,
+    bool AlreadyExisted,
+    string ShortcutPath,
+    string Message);
+
 public interface IDesktopShortcutService
 {
     string ShortcutFilePath { get; }
     bool IsShortcutPresent();
+    DesktopShortcutUpdateResult CreateOrUpdateShortcut();
     bool SetShortcutEnabled(bool enabled);
 }
 

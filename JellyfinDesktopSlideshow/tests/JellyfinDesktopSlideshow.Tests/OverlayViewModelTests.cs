@@ -1,4 +1,5 @@
 using System.IO;
+using JellyfinDesktopSlideshow.Infrastructure;
 using JellyfinDesktopSlideshow.Models;
 using JellyfinDesktopSlideshow.Services;
 using JellyfinDesktopSlideshow.ViewModels;
@@ -63,6 +64,93 @@ public sealed class OverlayViewModelTests
             {
                 Directory.Delete(tempDir, recursive: true);
             }
+        }
+    }
+
+    [Fact]
+    public async Task OverlayViewModel_SupportsDesktopShortcutCreationHideCommandAndPersistedCoordinatorFallback()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "JellyfinSlideshowOverlayTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var logger = new NullLoggingService();
+            var settingsPath = Path.Combine(tempDir, "settings.json");
+            var settingsService = new SettingsService(logger, settingsPath);
+            settingsService.Load();
+
+            var store = new CurrentWallpaperItemStore(logger, Path.Combine(tempDir, "current-item.json"));
+            store.Save(new MediaItem { Id = "movie-42", Name = "Arrival", Type = "Movie", ProductionYear = 2016 });
+
+            var slideshow = new FakeSlideshowService();
+            var launcher = new FakeItemLauncher();
+            var coordinator = new CurrentItemLaunchCoordinator(store, launcher, logger, slideshow);
+            var shortcutService = new FakeDesktopShortcutService();
+
+            var vm = new OverlayViewModel(slideshow, launcher, settingsService, logger, shortcutService, coordinator);
+
+            Assert.True(vm.HasCurrentItem);
+            Assert.True(vm.OpenCurrentItemCommand.CanExecute(null));
+            Assert.True(vm.CreateOrUpdateDesktopShortcutCommand.CanExecute(null));
+
+            DesktopShortcutUpdateResult? shortcutResult = null;
+            vm.DesktopShortcutCompleted += (_, r) => shortcutResult = r;
+            vm.CreateOrUpdateDesktopShortcutCommand.Execute(null);
+
+            Assert.NotNull(shortcutResult);
+            Assert.True(shortcutResult!.Succeeded);
+            Assert.False(shortcutResult.AlreadyExisted);
+            Assert.True(settingsService.Current.ShowDesktopShortcutIcon);
+
+            // Second call updates in place without duplicate
+            vm.CreateOrUpdateDesktopShortcutCommand.Execute(null);
+            Assert.NotNull(shortcutResult);
+            Assert.True(shortcutResult!.Succeeded);
+            Assert.True(shortcutResult.AlreadyExisted);
+            Assert.Equal(2, shortcutService.CallCount);
+
+            var hideRaised = false;
+            vm.HideOverlayRequested += (_, _) => hideRaised = true;
+            vm.HideOverlayCommand.Execute(null);
+            Assert.True(hideRaised);
+
+            var launchCompletion = new TaskCompletionSource<ItemLaunchResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            vm.LaunchCompleted += (_, result) => launchCompletion.TrySetResult(result);
+            vm.OpenCurrentItemCommand.Execute(null);
+            var launched = await launchCompletion.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(launched.Succeeded);
+            Assert.Single(launcher.LaunchedItems);
+            Assert.Equal("movie-42", launcher.LaunchedItems[0].Id);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    private sealed class FakeDesktopShortcutService : IDesktopShortcutService
+    {
+        public int CallCount { get; private set; }
+        public bool IsPresent { get; private set; }
+        public string ShortcutFilePath => @"C:\Desktop\باز کردن در Jellyfin.lnk";
+        public bool IsShortcutPresent() => IsPresent;
+
+        public DesktopShortcutUpdateResult CreateOrUpdateShortcut()
+        {
+            CallCount++;
+            var existed = IsPresent;
+            IsPresent = true;
+            return new DesktopShortcutUpdateResult(true, existed, ShortcutFilePath, existed ? "Updated" : "Created");
+        }
+
+        public bool SetShortcutEnabled(bool enabled)
+        {
+            IsPresent = enabled;
+            return true;
         }
     }
 

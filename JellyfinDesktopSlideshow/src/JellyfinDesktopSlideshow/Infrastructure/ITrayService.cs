@@ -7,6 +7,7 @@ public interface ITrayService : IDisposable
     event EventHandler? TogglePauseRequested;
     event EventHandler? NextSlideRequested;
     event EventHandler? OpenCurrentItemRequested;
+    event EventHandler? CreateDesktopShortcutRequested;
     event EventHandler? ExitApplicationRequested;
 
     void Initialize();

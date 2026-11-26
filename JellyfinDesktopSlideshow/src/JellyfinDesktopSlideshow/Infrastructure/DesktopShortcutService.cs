@@ -48,10 +48,12 @@ public sealed class WindowsDesktopShortcutAdapter : IDesktopShortcutPlatformAdap
                 shellLink.SetWorkingDirectory(workingDir);
             }
 
-            if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath))
+            if (string.IsNullOrWhiteSpace(iconPath) || !File.Exists(iconPath))
             {
-                shellLink.SetIconLocation(iconPath, 0);
+                throw new FileNotFoundException("فایل آیکون استاندارد میان‌بُر پیدا نشد.", iconPath);
             }
+
+            shellLink.SetIconLocation(iconPath, 0);
 
             // SW_SHOWMINNOACTIVE avoids flashing a console/window frame when invoking --open-current.
             shellLink.SetShowCmd(7);
@@ -78,7 +80,7 @@ public sealed class WindowsDesktopShortcutAdapter : IDesktopShortcutPlatformAdap
 
     public string EnsureDesktopIconFile(string iconPath)
     {
-        if (File.Exists(iconPath) && new FileInfo(iconPath).Length >= 128)
+        if (IsValidIcoFile(iconPath))
         {
             return iconPath;
         }
@@ -91,9 +93,61 @@ public sealed class WindowsDesktopShortcutAdapter : IDesktopShortcutPlatformAdap
 
         var icoBytes = BuildMultiSizePngIco([48, 128]);
         var tempPath = $"{iconPath}.{Guid.NewGuid():N}.tmp";
-        File.WriteAllBytes(tempPath, icoBytes);
-        File.Move(tempPath, iconPath, overwrite: true);
-        return iconPath;
+        try
+        {
+            File.WriteAllBytes(tempPath, icoBytes);
+            File.Move(tempPath, iconPath, overwrite: true);
+            tempPath = null!;
+            return iconPath;
+        }
+        finally
+        {
+            if (!string.IsNullOrWhiteSpace(tempPath) && File.Exists(tempPath))
+            {
+                try
+                {
+                    File.Delete(tempPath);
+                }
+                catch
+                {
+                    // Ignore best-effort temp cleanup.
+                }
+            }
+        }
+    }
+
+    internal static bool IsValidIcoFile(string iconPath)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(iconPath) || !File.Exists(iconPath))
+            {
+                return false;
+            }
+
+            var info = new FileInfo(iconPath);
+            if (info.Length < 128)
+            {
+                return false;
+            }
+
+            Span<byte> header = stackalloc byte[6];
+            using var stream = File.OpenRead(iconPath);
+            if (stream.Read(header) < 6)
+            {
+                return false;
+            }
+
+            // ICONDIR: Reserved == 0, Type == 1 (ICO), Count >= 1
+            var reserved = header[0] | (header[1] << 8);
+            var type = header[2] | (header[3] << 8);
+            var count = header[4] | (header[5] << 8);
+            return reserved == 0 && type == 1 && count >= 1 && info.Length >= 6 + (count * 16);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     internal static byte[] BuildMultiSizePngIco(int[] sizes)
@@ -310,6 +364,56 @@ public sealed class DesktopShortcutService : IDesktopShortcutService
         }
     }
 
+    public DesktopShortcutUpdateResult CreateOrUpdateShortcut()
+    {
+        var shortcutPath = string.Empty;
+        var alreadyExisted = false;
+
+        try
+        {
+            shortcutPath = ShortcutFilePath;
+            alreadyExisted = _adapter.ShortcutExists(shortcutPath);
+
+            var exePath = _executablePathProvider();
+            if (string.IsNullOrWhiteSpace(exePath))
+            {
+                const string message = "مسیر فایل اجرایی برنامه برای ساخت میان‌بُر دسکتاپ شناسایی نشد.";
+                _logger.Warning(message);
+                return new DesktopShortcutUpdateResult(false, alreadyExisted, shortcutPath, message);
+            }
+
+            var iconPath = _adapter.EnsureDesktopIconFile(_iconFilePath);
+            if (string.IsNullOrWhiteSpace(iconPath))
+            {
+                const string message = "ساخت یا شناسایی فایل آیکون استاندارد میان‌بُر ناموفق بود.";
+                _logger.Warning(message);
+                return new DesktopShortcutUpdateResult(false, alreadyExisted, shortcutPath, message);
+            }
+
+            _adapter.CreateOrUpdateShortcut(
+                shortcutPath,
+                exePath,
+                OpenCurrentArgument,
+                ShortcutDescription,
+                iconPath);
+
+            var messageText = alreadyExisted
+                ? "میان‌بر استاندارد دسکتاپ («باز کردن در Jellyfin») بدون ایجاد نسخهٔ تکراری به‌روزرسانی شد."
+                : "میان‌بر استاندارد «باز کردن در Jellyfin» روی دسکتاپ ساخته شد.";
+
+            return new DesktopShortcutUpdateResult(true, alreadyExisted, shortcutPath, messageText);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("به‌روزرسانی میان‌بُر استاندارد دسکتاپ ناموفق بود.", ex);
+            return new DesktopShortcutUpdateResult(
+                false,
+                alreadyExisted,
+                shortcutPath,
+                $"ساخت یا به‌روزرسانی میان‌بُر دسکتاپ ناموفق بود: {ex.Message}");
+        }
+    }
+
     public bool SetShortcutEnabled(bool enabled)
     {
         try
@@ -320,25 +424,11 @@ public sealed class DesktopShortcutService : IDesktopShortcutService
                 return true;
             }
 
-            var exePath = _executablePathProvider();
-            if (string.IsNullOrWhiteSpace(exePath))
-            {
-                _logger.Warning("مسیر فایل اجرایی برای ساخت میان‌بُر دسکتاپ شناسایی نشد.");
-                return false;
-            }
-
-            var iconPath = _adapter.EnsureDesktopIconFile(_iconFilePath);
-            _adapter.CreateOrUpdateShortcut(
-                ShortcutFilePath,
-                exePath,
-                OpenCurrentArgument,
-                ShortcutDescription,
-                iconPath);
-            return true;
+            return CreateOrUpdateShortcut().Succeeded;
         }
         catch (Exception ex)
         {
-            _logger.Error("به‌روزرسانی میان‌بُر استاندارد دسکتاپ ناموفق بود.", ex);
+            _logger.Error("تغییر وضعیت میان‌بُر استاندارد دسکتاپ ناموفق بود.", ex);
             return false;
         }
     }

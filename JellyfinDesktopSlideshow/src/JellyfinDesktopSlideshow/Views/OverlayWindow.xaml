@@ -19,6 +19,17 @@
             Background="Transparent"
             Padding="0"
             FocusVisualStyle="{x:Null}">
+        <Button.ContextMenu>
+            <ContextMenu FlowDirection="RightToLeft">
+                <MenuItem Header="باز کردن عنوان فعلی در Jellyfin"
+                          Command="{Binding PlacementTarget.DataContext.OpenCurrentItemCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                <MenuItem Header="ساخت / به‌روزرسانی میان‌بُر دسکتاپ"
+                          Command="{Binding PlacementTarget.DataContext.CreateOrUpdateDesktopShortcutCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                <Separator />
+                <MenuItem Header="مخفی کردن آیکون شناور"
+                          Command="{Binding PlacementTarget.DataContext.HideOverlayCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+            </ContextMenu>
+        </Button.ContextMenu>
         <Button.Template>
             <ControlTemplate TargetType="Button">
                 <Border x:Name="RootBadge"

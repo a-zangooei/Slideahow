@@ -736,6 +736,17 @@ public sealed class SettingsViewModel : ViewModelBase
         OnPropertyChanged(string.Empty);
     }
 
+    public void SyncDesktopShortcutStateFromSettings()
+    {
+        var s = _settingsService.Current;
+        _showOverlayIcon = s.ShowOverlayIcon;
+        _showDesktopShortcutIcon = s.ShowDesktopShortcutIcon;
+        OnPropertyChanged(nameof(ShowOverlayIcon));
+        OnPropertyChanged(nameof(ShowDesktopShortcutIcon));
+        OnPropertyChanged(nameof(IsFloatingOverlayEnabled));
+        OnPropertyChanged(nameof(SelectedDesktopIconMode));
+    }
+
     public async Task<bool> LoginAsync(string password)
     {
         IsBusy = true;
