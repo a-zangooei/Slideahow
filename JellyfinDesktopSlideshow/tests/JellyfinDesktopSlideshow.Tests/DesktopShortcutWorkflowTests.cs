@@ -250,7 +250,12 @@ public sealed class DesktopShortcutWorkflowTests : IDisposable
         private readonly string _imagePath;
         public FakeImageService(string imagePath) => _imagePath = imagePath;
         public Task<BackdropResolveResult> ResolveBackdropAsync(MediaItem item, CancellationToken cancellationToken = default)
-            => Task.FromResult(new BackdropResolveResult(BackdropResolveStatus.Success, _imagePath, false, "OK"));
+            => Task.FromResult(new BackdropResolveResult
+            {
+                Status = BackdropResolveStatus.Success,
+                LocalFilePath = _imagePath,
+                Message = "OK"
+            });
     }
 
     private sealed class FakeSlideshowService : ISlideshowService
