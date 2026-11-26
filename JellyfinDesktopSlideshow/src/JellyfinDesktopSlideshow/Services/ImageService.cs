@@ -40,91 +40,169 @@ public sealed class ImageService : IImageService
             return ResolveWithoutBackdrop(item, settings);
         }
 
-        var imageIndex = SelectBackdropIndex(item.BackdropImageTags.Count, settings);
-        var tag = item.BackdropImageTags[imageIndex];
-        var imageInfo = new JellyfinImageInfo
+        var candidateIndices = BuildCandidateIndices(item.BackdropImageTags.Count, settings);
+        var rejectedByAspectCount = 0;
+        string? lastAspectReason = null;
+        string? lastFailureReason = null;
+        JellyfinImageInfo? lastImageInfo = null;
+        var networkErrorOccurred = false;
+        var unauthenticated = false;
+
+        foreach (var imageIndex in candidateIndices)
+        {
+            var tag = item.BackdropImageTags[imageIndex];
+            var imageInfo = new JellyfinImageInfo
+            {
+                ItemId = item.Id,
+                ImageIndex = imageIndex,
+                Tag = tag,
+                MaxWidth = DefaultMaxWidth,
+                Quality = DefaultQuality,
+                RequestUrl = item.BackdropImageUrl
+            };
+            lastImageInfo = imageInfo;
+
+            var cachedPath = _cacheService.TryGetCachedFile(item.Id, imageIndex, tag);
+            if (cachedPath is not null)
+            {
+                if (ImageAspectFilter.IsAcceptableFile(cachedPath, settings, out var cachedAspectReason))
+                {
+                    return new BackdropResolveResult
+                    {
+                        Status = BackdropResolveStatus.Success,
+                        LocalFilePath = cachedPath,
+                        ImageInfo = imageInfo,
+                        Message = "تصویر از کش محلی بارگذاری شد."
+                    };
+                }
+
+                rejectedByAspectCount++;
+                lastAspectReason = cachedAspectReason;
+                _logger.Info($"Backdrop شماره {imageIndex} عنوان «{item.Name}» ({item.Id}) در کش به‌دلیل نسبت نامناسب رد شد: {cachedAspectReason}");
+                continue;
+            }
+
+            var session = _authService.CurrentSession;
+            if (!session.IsAuthenticated ||
+                session.ServerUri is null ||
+                string.IsNullOrWhiteSpace(session.AccessToken))
+            {
+                unauthenticated = true;
+                lastFailureReason = "اتصال فعال برقرار نیست.";
+                break;
+            }
+
+            try
+            {
+                var (bytes, _) = await _client.DownloadBackdropImageAsync(
+                    session.ServerUri,
+                    item.Id,
+                    imageIndex,
+                    tag,
+                    DefaultMaxWidth,
+                    DefaultQuality,
+                    session.AccessToken,
+                    settings.DeviceId,
+                    cancellationToken);
+
+                if (!ImageFormatValidator.TryDetectImageExtension(bytes, out var extension))
+                {
+                    _logger.Warning($"تصویر دریافت‌شده برای {item.Name} ({item.Id}) در Backdrop شماره {imageIndex} ناقص یا نامعتبر بود.");
+                    lastFailureReason = "تصویر دریافت‌شده از سرور خراب یا ناقص است.";
+                    continue;
+                }
+
+                if (!ImageAspectFilter.IsAcceptableBytes(bytes, settings, out var aspectReason))
+                {
+                    rejectedByAspectCount++;
+                    lastAspectReason = aspectReason;
+                    _logger.Info($"Backdrop شماره {imageIndex} عنوان «{item.Name}» ({item.Id}) به‌دلیل نسبت تصویر نامناسب رد شد: {aspectReason}");
+                    continue;
+                }
+
+                var savedPath = await _cacheService.SaveToCacheAsync(
+                    item.Id,
+                    imageIndex,
+                    tag,
+                    bytes,
+                    extension,
+                    cancellationToken);
+
+                if (savedPath is null)
+                {
+                    lastFailureReason = "فضای دیسک کافی نیست یا نوشتن در پوشهٔ کش امکان‌پذیر نشد.";
+                    continue;
+                }
+
+                _cacheService.PruneCache(settings.MaxCacheSizeMb, settings.MaxCacheAgeDays);
+
+                return new BackdropResolveResult
+                {
+                    Status = BackdropResolveStatus.Success,
+                    LocalFilePath = savedPath,
+                    ImageInfo = imageInfo,
+                    Message = "تصویر Backdrop دریافت و در کش ذخیره شد."
+                };
+            }
+            catch (JellyfinApiException ex)
+            {
+                _logger.Warning($"خطا در دریافت Backdrop برای {item.Name}: {ex.Message}");
+                networkErrorOccurred = true;
+                lastFailureReason = ex.Message;
+                break;
+            }
+        }
+
+        if (rejectedByAspectCount == candidateIndices.Count)
+        {
+            return new BackdropResolveResult
+            {
+                Status = BackdropResolveStatus.SkippedNoBackdrop,
+                ImageInfo = lastImageInfo,
+                Message = lastAspectReason is null
+                    ? $"هیچ‌یک از تصاویر Backdrop عنوان «{item.Name}» نسبت مناسب والپیپر دسکتاپ نداشتند."
+                    : $"عنوان «{item.Name}» رد شد: {lastAspectReason}"
+            };
+        }
+
+        var fallbackImageInfo = lastImageInfo ?? new JellyfinImageInfo
         {
             ItemId = item.Id,
-            ImageIndex = imageIndex,
-            Tag = tag,
+            ImageIndex = candidateIndices[0],
+            Tag = item.BackdropImageTags[candidateIndices[0]],
             MaxWidth = DefaultMaxWidth,
             Quality = DefaultQuality,
             RequestUrl = item.BackdropImageUrl
         };
 
-        var cachedPath = _cacheService.TryGetCachedFile(item.Id, imageIndex, tag);
-        if (cachedPath is not null)
+        if (unauthenticated || networkErrorOccurred)
         {
-            return new BackdropResolveResult
-            {
-                Status = BackdropResolveStatus.Success,
-                LocalFilePath = cachedPath,
-                ImageInfo = imageInfo,
-                Message = "تصویر از کش محلی بارگذاری شد."
-            };
+            return TryOfflineCacheOrFallback(
+                item,
+                fallbackImageInfo,
+                settings,
+                lastFailureReason ?? "اتصال فعال برقرار نیست.");
         }
 
-        var session = _authService.CurrentSession;
-        if (!session.IsAuthenticated ||
-            session.ServerUri is null ||
-            string.IsNullOrWhiteSpace(session.AccessToken))
-        {
-            return TryOfflineCacheOrFallback(item, imageInfo, settings, "اتصال فعال برقرار نیست.");
-        }
+        return TryFallbackOrFailure(
+            fallbackImageInfo,
+            settings,
+            lastFailureReason ?? "دریافت تصویر مناسب برای این عنوان ناموفق بود.");
+    }
 
-        try
+    private static List<int> BuildCandidateIndices(int availableCount, AppSettings settings)
+    {
+        var primaryIndex = SelectBackdropIndex(availableCount, settings);
+        var indices = new List<int>(availableCount) { primaryIndex };
+        for (var i = 0; i < availableCount; i++)
         {
-            var (bytes, _) = await _client.DownloadBackdropImageAsync(
-                session.ServerUri,
-                item.Id,
-                imageIndex,
-                tag,
-                DefaultMaxWidth,
-                DefaultQuality,
-                session.AccessToken,
-                settings.DeviceId,
-                cancellationToken);
-
-            if (!ImageFormatValidator.TryDetectImageExtension(bytes, out var extension))
+            if (i != primaryIndex)
             {
-                _logger.Warning($"تصویر دریافت‌شده برای {item.Name} ({item.Id}) ناقص یا نامعتبر بود.");
-                return TryFallbackOrFailure(
-                    imageInfo,
-                    settings,
-                    "تصویر دریافت‌شده از سرور خراب یا ناقص است.");
+                indices.Add(i);
             }
-
-            var savedPath = await _cacheService.SaveToCacheAsync(
-                item.Id,
-                imageIndex,
-                tag,
-                bytes,
-                extension,
-                cancellationToken);
-
-            if (savedPath is null)
-            {
-                return TryFallbackOrFailure(
-                    imageInfo,
-                    settings,
-                    "فضای دیسک کافی نیست یا نوشتن در پوشهٔ کش امکان‌پذیر نشد.");
-            }
-
-            _cacheService.PruneCache(settings.MaxCacheSizeMb, settings.MaxCacheAgeDays);
-
-            return new BackdropResolveResult
-            {
-                Status = BackdropResolveStatus.Success,
-                LocalFilePath = savedPath,
-                ImageInfo = imageInfo,
-                Message = "تصویر Backdrop دریافت و در کش ذخیره شد."
-            };
         }
-        catch (JellyfinApiException ex)
-        {
-            _logger.Warning($"خطا در دریافت Backdrop برای {item.Name}: {ex.Message}");
-            return TryOfflineCacheOrFallback(item, imageInfo, settings, ex.Message);
-        }
+
+        return indices;
     }
 
     private static int SelectBackdropIndex(int availableCount, AppSettings settings)
@@ -168,14 +246,15 @@ public sealed class ImageService : IImageService
         string reason)
     {
         var offlineCached = _cacheService.TryGetAnyCachedFileForItem(item.Id);
-        if (offlineCached is not null)
+        if (offlineCached is not null &&
+            ImageAspectFilter.IsAcceptableFile(offlineCached, settings, out _))
         {
             return new BackdropResolveResult
             {
                 Status = BackdropResolveStatus.UsedCacheOffline,
                 LocalFilePath = offlineCached,
                 ImageInfo = imageInfo,
-                Message = $"سرور در دسترس نیست؛ نسخهٔ کش‌شده نمایش داده شد."
+                Message = "سرور در دسترس نیست؛ نسخهٔ کش‌شده نمایش داده شد."
             };
         }
 

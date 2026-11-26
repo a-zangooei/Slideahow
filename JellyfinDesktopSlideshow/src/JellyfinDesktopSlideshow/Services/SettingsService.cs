@@ -57,6 +57,11 @@ public sealed class SettingsService : ISettingsService
             Current.MaxCacheSizeMb = Math.Clamp(Current.MaxCacheSizeMb, 32, 8192);
             Current.MaxCacheAgeDays = Math.Clamp(Current.MaxCacheAgeDays, 1, 365);
             Current.BackdropIndexPreference = Math.Clamp(Current.BackdropIndexPreference, 0, 20);
+            Current.MinBackdropAspectRatio = Math.Clamp(Current.MinBackdropAspectRatio, 0.2, 3.0);
+            Current.MaxBackdropAspectRatio = Math.Clamp(
+                Current.MaxBackdropAspectRatio,
+                Math.Max(1.1, Current.MinBackdropAspectRatio + 0.1),
+                10.0);
             Current.OverlaySize = Math.Clamp(Current.OverlaySize, 24, 96);
             Current.OverlayOpacity = Math.Clamp(Current.OverlayOpacity, 0.2, 1.0);
             Current.PlaybackTarget ??= new PlaybackTargetSettings();

@@ -43,9 +43,10 @@ JellyfinDesktopSlideshow/
    - دریافت کتابخانه‌های مجاز کاربر از `GET /Users/{userId}/Views` (و در صورت خطای `404` روی برخی نسخه‌ها، fallback خودکار به `GET /UserViews?userId={userId}`).
    - دریافت صفحهٔ اول و صفحات بعدی فیلم‌ها/سریال‌ها از `GET /Users/{userId}/Items` با `Recursive=true` و `Fields=ProductionYear,BackdropImageTags`.
 
-3. **دریافت و کش تصاویر (`ImageService` + `CacheService` + `ImageFormatValidator`):**
+3. **دریافت و کش تصاویر (`ImageService` + `CacheService` + `ImageFormatValidator` + `ImageAspectFilter`):**
    - تصویر Backdrop از `GET /Items/{itemId}/Images/Backdrop/{index}?maxWidth=1920&quality=92&tag=...` با هدر `Authorization: MediaBrowser` دانلود می‌شود (بدون `api_key` در QueryString).
-   - بایت‌های دریافتی با Magic Bytes (`ImageFormatValidator.TryDetectImageExtension`) بررسی می‌شوند تا فایل خراب یا HTML خطا ذخیره نشود.
+   - بایت‌های دریافتی با Magic Bytes (`ImageFormatValidator.TryDetectImageExtension`) و سپس نسبت ابعاد (`ImageFormatValidator.TryReadImageDimensions` + `ImageAspectFilter`) بررسی می‌شوند تا فایل خراب یا بنرهای خیلی دراز، مربعی و عمودی در کش ذخیره نشوند (پیشنهادی: `1.25` تا `2.80` با سطح‌های قابل انتخاب در تب ۶ تنظیمات و پیش‌فرض فعال).
+   - اگر Backdrop انتخاب‌شده نامناسب باشد، سایر `BackdropImageTags` همان عنوان بررسی می‌شوند و در صورت نبود هیچ تصویر مناسبی، عنوان در اسلایدشو رد (`SkippedNoBackdrop`) می‌گردد.
    - اگر عنوان `Backdrop` نداشته باشد یا شبکه قطع باشد، ترتیب اولویت عبارت است از: **کش محلی** -> **تصویر جایگزین (`FallbackImagePath`)** -> **رد کردن عنوان یا حفظ تصویر قبلی**.
 
 4. **زمان‌بندی اسلایدشو (`SlideshowService` + `WpfDispatcherTimerAdapter`):**

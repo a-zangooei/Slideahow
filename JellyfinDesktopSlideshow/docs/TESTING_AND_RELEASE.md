@@ -10,7 +10,7 @@
 - `JellyfinClientTests`: اعتبارسنجی هدر `MediaBrowser`، دریافت `PublicInfo`، fallback مسیر کتابخانه‌ها (`404` -> `UserViews`)، و مدیریت خطاهای `401/403/404/500/Timeout`.
 - `AuthenticationServiceTests`: ذخیرهٔ توکن در `ISecureStorageService`، عدم ذخیرهٔ رمز/توکن در JSON، بازیابی نشست و پاک‌سازی هنگام خروج.
 - `LibraryServiceTests`: فیلتر کتابخانه‌ها و انواع `Movie` / `Series` و صفحه‌بندی نتایج.
-- `CacheServiceTests` و `ImageServiceTests`: تشخیص فرمت واقعی باینری تصویر، نگهداری کش محلی، Prune خودکار بر اساس حجم و سن، حالت آفلاین و تصویر جایگزین.
+- `CacheServiceTests` و `ImageServiceTests` و `ImageAspectFilterTests`: تشخیص فرمت واقعی باینری و ابعاد تصاویر (PNG/JPEG/WebP/BMP)، فیلتر بنرهای دراز و تصاویر مربعی/عمودی با سطح‌های مختلف، بررسی سایر Backdropهای عنوان و رد شدن خودکار عنوانِ فقط-بنر، نگهداری کش محلی، Prune خودکار بر اساس حجم و سن، حالت آفلاین و تصویر جایگزین.
 - `SlideshowServiceTests`: ترتیب ترتیبی/تصادفی، پنجرهٔ عدم تکرار، قبلی/بعدی، مکث/ادامه، رد کردن عنوان بدون Backdrop و رفتار قطع اتصال.
 - `WallpaperServiceTests`: ذخیرهٔ مسیر و مقادیر خام رجیستری (`WallpaperStyle` / `TileWallpaper` شامل حالت `Tile`)، حفظ وضعیت اولیه در تغییرهای متوالی و تغییر `FitMode`، جلوگیری از ذخیرهٔ والپیپر خود برنامه به‌عنوان وضعیت اولیه، بازیابی وضعیت پس از خروج ناگهانی (Crash/Restart)، احترام به تغییر دستی کاربر پس از کرش، بکاپ `TranscodedWallpaper`، خطای شفاف در نبود فایل حذف‌شده و محدودیت‌های `Solid Color` / `Slideshow` / `Spotlight`.
 - `ItemLauncherTests` و `OverlayViewModelTests`: ساخت لینک رسمی وب، ارسال `Viewing` به نشست کلاینت دسکتاپ، پیشنهاد مرورگر در نبود کلاینت، جلوگیری از تزریق دستور در URL سفارشی و همگام‌سازی آیکون شناور.

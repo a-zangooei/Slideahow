@@ -59,6 +59,10 @@ public sealed class SettingsViewModel : ViewModelBase
     private int _maxCacheAgeDays = 14;
     private int _backdropIndexPreference;
     private bool _randomBackdropPerItem;
+    private bool _filterNonWallpaperAspectRatios = true;
+    private BackdropAspectFilterPreset _selectedBackdropAspectFilterPreset = BackdropAspectFilterPreset.Standard;
+    private double _minBackdropAspectRatio = 1.25;
+    private double _maxBackdropAspectRatio = 2.80;
 
     private bool _launchOnWindowsStartup;
     private bool _startMinimizedToTray;
@@ -95,6 +99,14 @@ public sealed class SettingsViewModel : ViewModelBase
         new(DesktopIconMode.DesktopShortcut, "آیکون استاندارد روی دسکتاپ (مانند سایر آیکون‌ها)"),
         new(DesktopIconMode.Both, "هر دو حالت (آیکون شناور + آیکون دسکتاپ)"),
         new(DesktopIconMode.Disabled, "غیرفعال")
+    ];
+
+    public IReadOnlyList<KeyValuePair<BackdropAspectFilterPreset, string>> BackdropAspectFilterPresets { get; } =
+    [
+        new(BackdropAspectFilterPreset.Standard, "پیشنهادی (حذف بنرهای دراز، مربعی و عمودی — 16:9 تا 21:9 مجاز)"),
+        new(BackdropAspectFilterPreset.StrictWidescreen, "سخت‌گیرانه عریض (نسبت 1.45 تا 2.45)"),
+        new(BackdropAspectFilterPreset.RelaxedBannerOnly, "فقط حذف بنرهای خیلی دراز و عمودی (نسبت 1.05 تا 3.20)"),
+        new(BackdropAspectFilterPreset.Custom, "بازهٔ دستی (سفارشی)")
     ];
 
     public AsyncRelayCommand TestConnectionCommand { get; }
@@ -625,6 +637,89 @@ public sealed class SettingsViewModel : ViewModelBase
         }
     }
 
+    public bool FilterNonWallpaperAspectRatios
+    {
+        get => _filterNonWallpaperAspectRatios;
+        set
+        {
+            if (SetProperty(ref _filterNonWallpaperAspectRatios, value))
+            {
+                SaveSetting(s => s.FilterNonWallpaperAspectRatios = value);
+                OnPropertyChanged(nameof(IsCustomAspectRatioEnabled));
+            }
+        }
+    }
+
+    public BackdropAspectFilterPreset SelectedBackdropAspectFilterPreset
+    {
+        get => _selectedBackdropAspectFilterPreset;
+        set
+        {
+            if (SetProperty(ref _selectedBackdropAspectFilterPreset, value))
+            {
+                if (value != BackdropAspectFilterPreset.Custom)
+                {
+                    var (min, max) = ImageAspectFilter.GetBoundsForPreset(value);
+                    _minBackdropAspectRatio = min;
+                    _maxBackdropAspectRatio = max;
+                    OnPropertyChanged(nameof(MinBackdropAspectRatio));
+                    OnPropertyChanged(nameof(MaxBackdropAspectRatio));
+                }
+
+                SaveSetting(s =>
+                {
+                    s.BackdropAspectFilterPreset = value;
+                    s.MinBackdropAspectRatio = _minBackdropAspectRatio;
+                    s.MaxBackdropAspectRatio = _maxBackdropAspectRatio;
+                });
+
+                OnPropertyChanged(nameof(IsCustomAspectRatioEnabled));
+            }
+        }
+    }
+
+    public bool IsCustomAspectRatioEnabled =>
+        FilterNonWallpaperAspectRatios &&
+        SelectedBackdropAspectFilterPreset == BackdropAspectFilterPreset.Custom;
+
+    public double MinBackdropAspectRatio
+    {
+        get => _minBackdropAspectRatio;
+        set
+        {
+            var clamped = Math.Round(Math.Clamp(value, 0.2, 3.0), 2);
+            if (SetProperty(ref _minBackdropAspectRatio, clamped))
+            {
+                var minAllowedMax = Math.Round(Math.Max(1.1, clamped + 0.1), 2);
+                if (_maxBackdropAspectRatio < minAllowedMax)
+                {
+                    _maxBackdropAspectRatio = minAllowedMax;
+                    OnPropertyChanged(nameof(MaxBackdropAspectRatio));
+                }
+
+                SaveSetting(s =>
+                {
+                    s.MinBackdropAspectRatio = _minBackdropAspectRatio;
+                    s.MaxBackdropAspectRatio = _maxBackdropAspectRatio;
+                });
+            }
+        }
+    }
+
+    public double MaxBackdropAspectRatio
+    {
+        get => _maxBackdropAspectRatio;
+        set
+        {
+            var minAllowedMax = Math.Max(1.1, _minBackdropAspectRatio + 0.1);
+            var clamped = Math.Round(Math.Clamp(value, minAllowedMax, 10.0), 2);
+            if (SetProperty(ref _maxBackdropAspectRatio, clamped))
+            {
+                SaveSetting(s => s.MaxBackdropAspectRatio = clamped);
+            }
+        }
+    }
+
     public string FallbackImagePath
     {
         get => _fallbackImagePath;
@@ -728,6 +823,10 @@ public sealed class SettingsViewModel : ViewModelBase
         _maxCacheAgeDays = s.MaxCacheAgeDays;
         _backdropIndexPreference = s.BackdropIndexPreference;
         _randomBackdropPerItem = s.RandomBackdropPerItem;
+        _filterNonWallpaperAspectRatios = s.FilterNonWallpaperAspectRatios;
+        _selectedBackdropAspectFilterPreset = s.BackdropAspectFilterPreset;
+        _minBackdropAspectRatio = s.MinBackdropAspectRatio;
+        _maxBackdropAspectRatio = s.MaxBackdropAspectRatio;
         _fallbackImagePath = s.FallbackImagePath ?? string.Empty;
         _launchOnWindowsStartup = s.LaunchOnWindowsStartup || _startupService.IsStartupEnabled();
         _startMinimizedToTray = s.StartMinimizedToTray;

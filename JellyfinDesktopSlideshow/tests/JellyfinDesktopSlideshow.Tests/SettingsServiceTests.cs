@@ -43,7 +43,10 @@ public sealed class SettingsServiceTests : IDisposable
             OverlaySize = 300,
             OverlayOpacity = 5.0,
             ShowOverlayIcon = false,
-            MinimizeToTrayOnClose = false
+            MinimizeToTrayOnClose = false,
+            BackdropAspectFilterPreset = BackdropAspectFilterPreset.Custom,
+            MinBackdropAspectRatio = 0.01,
+            MaxBackdropAspectRatio = 25.0
         };
 
         service.Save(settings);
@@ -59,6 +62,10 @@ public sealed class SettingsServiceTests : IDisposable
         Assert.Equal(1.0, reloaded.OverlayOpacity);
         Assert.False(reloaded.ShowOverlayIcon);
         Assert.False(reloaded.MinimizeToTrayOnClose);
+        Assert.True(reloaded.FilterNonWallpaperAspectRatios);
+        Assert.Equal(BackdropAspectFilterPreset.Custom, reloaded.BackdropAspectFilterPreset);
+        Assert.Equal(0.2, reloaded.MinBackdropAspectRatio);
+        Assert.Equal(10.0, reloaded.MaxBackdropAspectRatio);
     }
 
     public void Dispose()

@@ -67,7 +67,25 @@ public sealed class SettingsViewModelTests : IDisposable
         Assert.Equal(string.Empty, vm.CustomUrlValidationMessage);
         Assert.Equal("{baseUrl}/web/index.html#!/details?id={itemId}", settingsService.Current.PlaybackTarget.CustomUrlTemplate);
 
-        // Section 6: Cache & Backdrop bounds
+        // Section 6: Cache & Backdrop bounds & aspect ratio filter
+        Assert.True(vm.FilterNonWallpaperAspectRatios);
+        Assert.Equal(BackdropAspectFilterPreset.Standard, vm.SelectedBackdropAspectFilterPreset);
+        Assert.False(vm.IsCustomAspectRatioEnabled);
+
+        vm.SelectedBackdropAspectFilterPreset = BackdropAspectFilterPreset.StrictWidescreen;
+        Assert.Equal(1.45, vm.MinBackdropAspectRatio);
+        Assert.Equal(2.45, vm.MaxBackdropAspectRatio);
+
+        vm.SelectedBackdropAspectFilterPreset = BackdropAspectFilterPreset.Custom;
+        Assert.True(vm.IsCustomAspectRatioEnabled);
+        vm.MinBackdropAspectRatio = 0.05; // clamped to 0.20
+        vm.MaxBackdropAspectRatio = 50.0; // clamped to 10.0
+        Assert.Equal(0.2, vm.MinBackdropAspectRatio);
+        Assert.Equal(10.0, vm.MaxBackdropAspectRatio);
+
+        vm.FilterNonWallpaperAspectRatios = false;
+        Assert.False(vm.IsCustomAspectRatioEnabled);
+
         vm.MaxCacheSizeMb = 10; // clamped to 32
         vm.MaxCacheAgeDays = 999; // clamped to 365
         vm.RandomBackdropPerItem = true;
@@ -90,6 +108,10 @@ public sealed class SettingsViewModelTests : IDisposable
         Assert.Equal(96, reloaded.OverlaySize);
         Assert.Equal(0.2, reloaded.OverlayOpacity);
         Assert.Equal(PlaybackTargetType.CustomUrlTemplate, reloaded.PlaybackTarget.TargetType);
+        Assert.False(reloaded.FilterNonWallpaperAspectRatios);
+        Assert.Equal(BackdropAspectFilterPreset.Custom, reloaded.BackdropAspectFilterPreset);
+        Assert.Equal(0.2, reloaded.MinBackdropAspectRatio);
+        Assert.Equal(10.0, reloaded.MaxBackdropAspectRatio);
         Assert.True(reloaded.LaunchOnWindowsStartup);
         Assert.True(reloaded.StartMinimizedToTray);
         Assert.False(reloaded.MinimizeToTrayOnClose);

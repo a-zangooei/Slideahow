@@ -39,6 +39,10 @@ public sealed class AppSettings
     public int MaxCacheAgeDays { get; set; } = 14;
     public int BackdropIndexPreference { get; set; } = 0;
     public bool RandomBackdropPerItem { get; set; } = false;
+    public bool FilterNonWallpaperAspectRatios { get; set; } = true;
+    public BackdropAspectFilterPreset BackdropAspectFilterPreset { get; set; } = BackdropAspectFilterPreset.Standard;
+    public double MinBackdropAspectRatio { get; set; } = 1.25;
+    public double MaxBackdropAspectRatio { get; set; } = 2.80;
     public string? FallbackImagePath { get; set; }
 
     public bool ShowOverlayIcon { get; set; } = true;
@@ -69,4 +73,12 @@ public enum DesktopIconMode
     DesktopShortcut = 1,
     Both = 2,
     Disabled = 3
+}
+
+public enum BackdropAspectFilterPreset
+{
+    Standard = 0,
+    StrictWidescreen = 1,
+    RelaxedBannerOnly = 2,
+    Custom = 3
 }

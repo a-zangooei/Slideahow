@@ -301,6 +301,48 @@
                                   IsChecked="{Binding RandomBackdropPerItem}"
                                   Margin="0,0,0,12" />
 
+                        <Border BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="فیلتر ابعاد و نسبت تصویر Backdrop" FontWeight="SemiBold" Margin="0,0,0,8" />
+
+                                <CheckBox Content="حذف خودکار بنرهای خیلی دراز، تصاویر مربعی و عمودی (نامناسب برای والپیپر)"
+                                          IsChecked="{Binding FilterNonWallpaperAspectRatios}"
+                                          Margin="0,0,0,8" />
+
+                                <TextBlock Text="سطح فیلتر نسبت تصویر:" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <ComboBox ItemsSource="{Binding BackdropAspectFilterPresets}"
+                                          SelectedValue="{Binding SelectedBackdropAspectFilterPreset}"
+                                          SelectedValuePath="Key"
+                                          DisplayMemberPath="Value"
+                                          IsEnabled="{Binding FilterNonWallpaperAspectRatios}"
+                                          Padding="8,5"
+                                          Margin="0,0,0,10" />
+
+                                <Grid IsEnabled="{Binding IsCustomAspectRatioEnabled}" Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="210" />
+                                        <ColumnDefinition Width="120" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="8" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="حداقل نسبت مجاز (عرض به ارتفاع):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding MinBackdropAspectRatio, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="حداکثر نسبت مجاز (عرض به ارتفاع):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding MaxBackdropAspectRatio, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
+                                </Grid>
+
+                                <TextBlock Text="در حالت پیشنهادی، والپیپرهای عریض استاندارد (مانند 16:9، 16:10 و 21:9) حفظ می‌شوند و بنرهای باریک یا تصاویر مربعی و عمودی فیلتر می‌گردند. اگر تصویر نامناسب باشد، سایر Backdropهای همان عنوان بررسی می‌شوند و در نبود تصویر مناسب، عنوان رد خواهد شد."
+                                           Foreground="#64748B"
+                                           FontSize="12"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
                         <TextBlock Text="{Binding CacheSummary}" FontWeight="SemiBold" Foreground="#0F172A" Margin="0,0,0,8" />
                         <WrapPanel Margin="0,0,0,16">
                             <Button Content="پاک‌سازی بر اساس محدودیت"
