@@ -212,8 +212,14 @@ public sealed class LocalizationAndBidiTests : IDisposable
 
         Assert.Equal("fa-IR", mainVm.SelectedLanguageCode);
         Assert.Equal("fa-IR", settingsVm.SelectedLanguageCode);
-        Assert.Equal(localization.GetString("Status.Disconnected"), mainVm.ConnectionStatus);
-        Assert.Equal(localization.GetString("Option.WallpaperFit.Fill"), settingsVm.WallpaperFitModes[0].Value);
+        Assert.True(localization.IsRightToLeft);
+        Assert.Equal(FlowDirection.RightToLeft, localization.CurrentFlowDirection);
+        Assert.Equal("متصل نیست", mainVm.ConnectionStatus);
+        Assert.Equal("متصل نیست", settingsVm.ConnectionStatus);
+        Assert.Equal("پر کردن صفحه (Fill)", settingsVm.WallpaperFitModes[0].Value);
+        Assert.Equal(
+            ["پر کردن صفحه (Fill)", "متناسب (Fit)", "کشیده (Stretch)", "مرکز (Center)", "گسترده چند مانیتور (Span)"],
+            settingsVm.WallpaperFitModes.Select(m => m.Value).ToArray());
         Assert.Equal("کلید API (روش اصلی و پیشنهادی)", settingsVm.AuthMethodOptions[0].Value);
         Assert.Equal("کلید API (اصلی)", mainVm.AuthMethodOptions[0].Value);
 
@@ -224,7 +230,9 @@ public sealed class LocalizationAndBidiTests : IDisposable
 
         Assert.Equal("en-US", settingsService.Current.Language);
         Assert.Equal("en-US", mainVm.SelectedLanguageCode);
+        Assert.Equal("en-US", settingsVm.SelectedLanguageCode);
         Assert.False(localization.IsRightToLeft);
+        Assert.Equal(FlowDirection.LeftToRight, localization.CurrentFlowDirection);
         Assert.Equal("Disconnected", mainVm.ConnectionStatus);
         Assert.Equal("Disconnected", settingsVm.ConnectionStatus);
         Assert.Equal("Fill", settingsVm.WallpaperFitModes[0].Value);
@@ -238,8 +246,11 @@ public sealed class LocalizationAndBidiTests : IDisposable
         mainVm.SelectedLanguageCode = "fa-IR";
         Assert.Equal(1, mainSynced);
         Assert.Equal("fa-IR", settingsVm.SelectedLanguageCode);
+        Assert.Equal("fa-IR", mainVm.SelectedLanguageCode);
         Assert.True(localization.IsRightToLeft);
-        Assert.Equal("قطع", mainVm.ConnectionStatus);
+        Assert.Equal(FlowDirection.RightToLeft, localization.CurrentFlowDirection);
+        Assert.Equal("متصل نیست", mainVm.ConnectionStatus);
+        Assert.Equal("متصل نیست", settingsVm.ConnectionStatus);
         Assert.Equal("پر کردن صفحه (Fill)", settingsVm.WallpaperFitModes[0].Value);
         Assert.Equal(
             ["پر کردن صفحه (Fill)", "متناسب (Fit)", "کشیده (Stretch)", "مرکز (Center)", "گسترده چند مانیتور (Span)"],
@@ -380,6 +391,142 @@ public sealed class LocalizationAndBidiTests : IDisposable
                 new KeyValuePair<JellyfinAuthMethod, string>(JellyfinAuthMethod.UsernamePassword, "Username & Password")
             ],
             mainVm.AuthMethodOptions);
+    }
+
+    [Fact]
+    public void SettingsViewModel_AllDropdownOptionCollections_ReflectActiveLanguageInBothPersianAndEnglish()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var settingsPath = Path.Combine(_tempDir, "settings-dropdowns.json");
+        var logger = new NullLoggingService();
+        var settingsService = new SettingsService(logger, settingsPath);
+        settingsService.Load();
+
+        var provider = new JsonLanguagePackProvider(
+            typeof(LocalizationService).Assembly,
+            Path.Combine(_tempDir, "no-ext-dropdowns"));
+        var localization = new LocalizationService(provider, "fa-IR");
+
+        var settingsVm = new SettingsViewModel(
+            new StubAuthService(),
+            new StubLibraryService(),
+            new CacheService(logger, Path.Combine(_tempDir, "cache-dropdowns")),
+            new StubSlideshowService(),
+            new StubWallpaperService(),
+            new StubItemLauncher(),
+            new StubOverlayService(),
+            new StubDesktopShortcutService(),
+            new StubStartupService(),
+            settingsService,
+            logger,
+            cleanupService: null,
+            localization: localization);
+
+        // Persian assertions
+        Assert.Equal(
+            [
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Fill, "پر کردن صفحه (Fill)"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Fit, "متناسب (Fit)"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Stretch, "کشیده (Stretch)"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Center, "مرکز (Center)"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Span, "گسترده چند مانیتور (Span)")
+            ],
+            settingsVm.WallpaperFitModes);
+
+        Assert.Equal(
+            [
+                new KeyValuePair<OfflineBehaviorMode, string>(OfflineBehaviorMode.UseCacheAndRetry, "استفاده از کش و تلاش مجدد خودکار"),
+                new KeyValuePair<OfflineBehaviorMode, string>(OfflineBehaviorMode.KeepCurrentWallpaper, "حفظ والپیپر فعلی بدون خطا"),
+                new KeyValuePair<OfflineBehaviorMode, string>(OfflineBehaviorMode.PauseSlideshow, "توقف (مکث) اسلایدشو هنگام قطع اتصال")
+            ],
+            settingsVm.OfflineBehaviorOptions);
+
+        Assert.Equal(
+            [
+                new KeyValuePair<PlaybackTargetType, string>(PlaybackTargetType.DefaultBrowser, "مرورگر پیش‌فرض"),
+                new KeyValuePair<PlaybackTargetType, string>(PlaybackTargetType.JellyfinDesktopClient, "برنامهٔ Jellyfin دسکتاپ"),
+                new KeyValuePair<PlaybackTargetType, string>(PlaybackTargetType.CustomUrlTemplate, "الگوی URL سفارشی")
+            ],
+            settingsVm.PlaybackTargetOptions);
+
+        Assert.Equal(
+            [
+                new KeyValuePair<DesktopIconMode, string>(DesktopIconMode.FloatingOverlay, "آیکون شناور روی صفحه"),
+                new KeyValuePair<DesktopIconMode, string>(DesktopIconMode.DesktopShortcut, "آیکون استاندارد روی دسکتاپ (مانند سایر آیکون‌ها)"),
+                new KeyValuePair<DesktopIconMode, string>(DesktopIconMode.Both, "هر دو حالت (آیکون شناور + آیکون دسکتاپ)"),
+                new KeyValuePair<DesktopIconMode, string>(DesktopIconMode.Disabled, "غیرفعال")
+            ],
+            settingsVm.DesktopIconModes);
+
+        Assert.Equal(
+            [
+                new KeyValuePair<BackdropAspectFilterPreset, string>(BackdropAspectFilterPreset.Standard, "پیشنهادی (حذف بنرهای دراز، مربعی و عمودی — 16:9 تا 21:9 مجاز)"),
+                new KeyValuePair<BackdropAspectFilterPreset, string>(BackdropAspectFilterPreset.StrictWidescreen, "سخت‌گیرانه عریض (نسبت 1.45 تا 2.45)"),
+                new KeyValuePair<BackdropAspectFilterPreset, string>(BackdropAspectFilterPreset.RelaxedBannerOnly, "فقط حذف بنرهای خیلی دراز و عمودی (نسبت 1.05 تا 3.20)"),
+                new KeyValuePair<BackdropAspectFilterPreset, string>(BackdropAspectFilterPreset.Custom, "بازهٔ دستی (سفارشی)")
+            ],
+            settingsVm.BackdropAspectFilterPresets);
+
+        Assert.Equal(
+            [
+                new KeyValuePair<JellyfinAuthMethod, string>(JellyfinAuthMethod.ApiKey, "کلید API (روش اصلی و پیشنهادی)"),
+                new KeyValuePair<JellyfinAuthMethod, string>(JellyfinAuthMethod.UsernamePassword, "نام کاربری و رمز")
+            ],
+            settingsVm.AuthMethodOptions);
+
+        // Switch to English
+        settingsVm.SelectedLanguageCode = "en-US";
+
+        Assert.Equal(
+            [
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Fill, "Fill"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Fit, "Fit"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Stretch, "Stretch"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Center, "Center"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Span, "Span (Multi-Monitor)")
+            ],
+            settingsVm.WallpaperFitModes);
+
+        Assert.Equal(
+            [
+                new KeyValuePair<OfflineBehaviorMode, string>(OfflineBehaviorMode.UseCacheAndRetry, "Use cached image and retry automatically"),
+                new KeyValuePair<OfflineBehaviorMode, string>(OfflineBehaviorMode.KeepCurrentWallpaper, "Keep current wallpaper silently"),
+                new KeyValuePair<OfflineBehaviorMode, string>(OfflineBehaviorMode.PauseSlideshow, "Pause slideshow when disconnected")
+            ],
+            settingsVm.OfflineBehaviorOptions);
+
+        Assert.Equal(
+            [
+                new KeyValuePair<PlaybackTargetType, string>(PlaybackTargetType.DefaultBrowser, "Default Browser"),
+                new KeyValuePair<PlaybackTargetType, string>(PlaybackTargetType.JellyfinDesktopClient, "Jellyfin Desktop App"),
+                new KeyValuePair<PlaybackTargetType, string>(PlaybackTargetType.CustomUrlTemplate, "Custom URL Template")
+            ],
+            settingsVm.PlaybackTargetOptions);
+
+        Assert.Equal(
+            [
+                new KeyValuePair<DesktopIconMode, string>(DesktopIconMode.FloatingOverlay, "Floating overlay icon on screen"),
+                new KeyValuePair<DesktopIconMode, string>(DesktopIconMode.DesktopShortcut, "Standard desktop shortcut icon"),
+                new KeyValuePair<DesktopIconMode, string>(DesktopIconMode.Both, "Both (Floating overlay + Desktop shortcut)"),
+                new KeyValuePair<DesktopIconMode, string>(DesktopIconMode.Disabled, "Disabled")
+            ],
+            settingsVm.DesktopIconModes);
+
+        Assert.Equal(
+            [
+                new KeyValuePair<BackdropAspectFilterPreset, string>(BackdropAspectFilterPreset.Standard, "Recommended (filters banners, squares & portraits — allows 16:9 to 21:9)"),
+                new KeyValuePair<BackdropAspectFilterPreset, string>(BackdropAspectFilterPreset.StrictWidescreen, "Strict widescreen (ratio 1.45 to 2.45)"),
+                new KeyValuePair<BackdropAspectFilterPreset, string>(BackdropAspectFilterPreset.RelaxedBannerOnly, "Relaxed (filters only ultra-wide banners & portraits — 1.05 to 3.20)"),
+                new KeyValuePair<BackdropAspectFilterPreset, string>(BackdropAspectFilterPreset.Custom, "Custom bounds")
+            ],
+            settingsVm.BackdropAspectFilterPresets);
+
+        Assert.Equal(
+            [
+                new KeyValuePair<JellyfinAuthMethod, string>(JellyfinAuthMethod.ApiKey, "API Key (Primary & Recommended)"),
+                new KeyValuePair<JellyfinAuthMethod, string>(JellyfinAuthMethod.UsernamePassword, "Username & Password")
+            ],
+            settingsVm.AuthMethodOptions);
     }
 
     public void Dispose()
