@@ -214,6 +214,8 @@ public sealed class LocalizationAndBidiTests : IDisposable
         Assert.Equal("fa-IR", settingsVm.SelectedLanguageCode);
         Assert.Equal(localization.GetString("Status.Disconnected"), mainVm.ConnectionStatus);
         Assert.Equal(localization.GetString("Option.WallpaperFit.Fill"), settingsVm.WallpaperFitModes[0].Value);
+        Assert.Equal("کلید API (روش اصلی و پیشنهادی)", settingsVm.AuthMethodOptions[0].Value);
+        Assert.Equal("کلید API (اصلی)", mainVm.AuthMethodOptions[0].Value);
 
         var mainSynced = 0;
         mainVm.LanguageSynchronized += (_, _) => mainSynced++;
@@ -229,7 +231,8 @@ public sealed class LocalizationAndBidiTests : IDisposable
         Assert.Equal(
             ["Fill", "Fit", "Stretch", "Center", "Span (Multi-Monitor)"],
             settingsVm.WallpaperFitModes.Select(m => m.Value).ToArray());
-        Assert.Equal("API Key (Recommended)", settingsVm.AuthMethodOptions[0].Value);
+        Assert.Equal("API Key (Primary & Recommended)", settingsVm.AuthMethodOptions[0].Value);
+        Assert.Equal("API Key (Primary)", mainVm.AuthMethodOptions[0].Value);
 
         // Switching from MainViewModel propagates back to SettingsViewModel & persistence
         mainVm.SelectedLanguageCode = "fa-IR";
@@ -241,6 +244,8 @@ public sealed class LocalizationAndBidiTests : IDisposable
         Assert.Equal(
             ["پر کردن صفحه (Fill)", "متناسب (Fit)", "کشیده (Stretch)", "مرکز (Center)", "گسترده چند مانیتور (Span)"],
             settingsVm.WallpaperFitModes.Select(m => m.Value).ToArray());
+        Assert.Equal("کلید API (روش اصلی و پیشنهادی)", settingsVm.AuthMethodOptions[0].Value);
+        Assert.Equal("کلید API (اصلی)", mainVm.AuthMethodOptions[0].Value);
 
         var reloaded = new SettingsService(logger, settingsPath).Load();
         Assert.Equal("fa-IR", reloaded.Language);
@@ -298,6 +303,83 @@ public sealed class LocalizationAndBidiTests : IDisposable
                 new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Span, "Span (Multi-Monitor)")
             ],
             settingsVm.WallpaperFitModes);
+    }
+
+    [Fact]
+    public void ViewModels_AuthMethodOptions_ReflectActiveLanguageAccurately()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var settingsPath = Path.Combine(_tempDir, "settings-auth.json");
+        var logger = new NullLoggingService();
+        var settingsService = new SettingsService(logger, settingsPath);
+        settingsService.Load();
+
+        var provider = new JsonLanguagePackProvider(
+            typeof(LocalizationService).Assembly,
+            Path.Combine(_tempDir, "no-ext-auth"));
+        var localization = new LocalizationService(provider, "fa-IR");
+
+        var settingsVm = new SettingsViewModel(
+            new StubAuthService(),
+            new StubLibraryService(),
+            new CacheService(logger, Path.Combine(_tempDir, "cache-auth")),
+            new StubSlideshowService(),
+            new StubWallpaperService(),
+            new StubItemLauncher(),
+            new StubOverlayService(),
+            new StubDesktopShortcutService(),
+            new StubStartupService(),
+            settingsService,
+            logger,
+            cleanupService: null,
+            localization: localization);
+
+        var mainVm = new MainViewModel(
+            new StubAuthService(),
+            new StubLibraryService(),
+            cacheService: new CacheService(logger, Path.Combine(_tempDir, "cache-main-auth")),
+            imageService: new StubImageService(),
+            slideshowService: new StubSlideshowService(),
+            wallpaperService: new StubWallpaperService(),
+            itemLauncher: new StubItemLauncher(),
+            overlayService: new StubOverlayService(),
+            settingsService: settingsService,
+            logger: logger,
+            desktopShortcutService: new StubDesktopShortcutService(),
+            launchCoordinator: null,
+            localization: localization);
+
+        // Persian initial options
+        Assert.Equal(
+            [
+                new KeyValuePair<JellyfinAuthMethod, string>(JellyfinAuthMethod.ApiKey, "کلید API (روش اصلی و پیشنهادی)"),
+                new KeyValuePair<JellyfinAuthMethod, string>(JellyfinAuthMethod.UsernamePassword, "نام کاربری و رمز")
+            ],
+            settingsVm.AuthMethodOptions);
+
+        Assert.Equal(
+            [
+                new KeyValuePair<JellyfinAuthMethod, string>(JellyfinAuthMethod.ApiKey, "کلید API (اصلی)"),
+                new KeyValuePair<JellyfinAuthMethod, string>(JellyfinAuthMethod.UsernamePassword, "نام کاربری و رمز عبور")
+            ],
+            mainVm.AuthMethodOptions);
+
+        // Switch to English
+        settingsVm.SelectedLanguageCode = "en-US";
+
+        Assert.Equal(
+            [
+                new KeyValuePair<JellyfinAuthMethod, string>(JellyfinAuthMethod.ApiKey, "API Key (Primary & Recommended)"),
+                new KeyValuePair<JellyfinAuthMethod, string>(JellyfinAuthMethod.UsernamePassword, "Username & Password")
+            ],
+            settingsVm.AuthMethodOptions);
+
+        Assert.Equal(
+            [
+                new KeyValuePair<JellyfinAuthMethod, string>(JellyfinAuthMethod.ApiKey, "API Key (Primary)"),
+                new KeyValuePair<JellyfinAuthMethod, string>(JellyfinAuthMethod.UsernamePassword, "Username & Password")
+            ],
+            mainVm.AuthMethodOptions);
     }
 
     public void Dispose()
