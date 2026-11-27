@@ -44,7 +44,7 @@ public sealed class ApplicationBootstrapper
         _application = application;
         _paths = paths ?? AppDataPaths.Default;
         _localization = localization ?? new LocalizationService(
-            new JsonLanguagePackProvider(externalDirectory: AppDataPaths.DefaultExternalLanguagesDirectory));
+            new JsonLanguagePackProvider(externalLanguagesDirectory: AppDataPaths.DefaultExternalLanguagesDirectory));
     }
 
     public ILoggingService? Logger => _logger;
@@ -126,7 +126,7 @@ public sealed class ApplicationBootstrapper
         var desktopShortcutService = new DesktopShortcutService(
             new WindowsDesktopShortcutAdapter(),
             _logger,
-            iconDirectory: _paths.IconsDirectory,
+            iconFilePath: _paths.DesktopShortcutIconFilePath,
             localization: _localization);
         _desktopShortcutService = desktopShortcutService;
         desktopShortcutService.SetShortcutEnabled(loadedSettings.ShowDesktopShortcutIcon);
