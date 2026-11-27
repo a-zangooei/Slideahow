@@ -17,15 +17,18 @@ public sealed class LibraryService : ILibraryService
     private readonly IJellyfinClient _client;
     private readonly IAuthenticationService _authService;
     private readonly ISettingsService _settingsService;
+    private readonly Localization.ILocalizationService _localization;
 
     public LibraryService(
         IJellyfinClient client,
         IAuthenticationService authService,
-        ISettingsService settingsService)
+        ISettingsService settingsService,
+        Localization.ILocalizationService? localization = null)
     {
         _client = client;
         _authService = authService;
         _settingsService = settingsService;
+        _localization = localization ?? Localization.AppLocalization.Current;
     }
 
     public async Task<IReadOnlyList<JellyfinLibrary>> GetAccessibleLibrariesAsync(CancellationToken cancellationToken = default)
@@ -188,7 +191,7 @@ public sealed class LibraryService : ILibraryService
         {
             throw new JellyfinApiException(
                 JellyfinErrorKind.Unauthorized,
-                "ابتدا از طریق کلید API یا حساب کاربری به سرور Jellyfin متصل شوید.");
+                _localization.GetString("Auth.Error.AuthRequired"));
         }
 
         return session;

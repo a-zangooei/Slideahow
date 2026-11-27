@@ -56,6 +56,7 @@ public sealed class AppSettings
     public double OverlayOpacity { get; set; } = 0.85;
 
     public PlaybackTargetSettings PlaybackTarget { get; set; } = new();
+    public string Language { get; set; } = "fa-IR";
     public bool LaunchOnWindowsStartup { get; set; } = false;
     public bool StartMinimizedToTray { get; set; } = false;
     public bool MinimizeToTrayOnClose { get; set; } = true;

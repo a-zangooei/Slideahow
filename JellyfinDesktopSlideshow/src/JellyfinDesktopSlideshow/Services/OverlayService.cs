@@ -1,5 +1,6 @@
 using System.Windows;
 using JellyfinDesktopSlideshow.Infrastructure;
+using JellyfinDesktopSlideshow.Localization;
 using JellyfinDesktopSlideshow.ViewModels;
 using JellyfinDesktopSlideshow.Views;
 
@@ -11,6 +12,7 @@ public sealed class OverlayService : IOverlayService
     private readonly ISettingsService _settingsService;
     private readonly IItemLauncher _itemLauncher;
     private readonly ILoggingService _logger;
+    private readonly ILocalizationService _localization;
     private OverlayWindow? _window;
 
     public bool IsVisible => _window is { IsVisible: true };
@@ -21,12 +23,14 @@ public sealed class OverlayService : IOverlayService
         OverlayViewModel viewModel,
         ISettingsService settingsService,
         IItemLauncher itemLauncher,
-        ILoggingService logger)
+        ILoggingService logger,
+        ILocalizationService? localization = null)
     {
         _viewModel = viewModel;
         _settingsService = settingsService;
         _itemLauncher = itemLauncher;
         _logger = logger;
+        _localization = localization ?? AppLocalization.Current;
 
         _viewModel.LaunchCompleted += OnLaunchCompleted;
         _viewModel.DesktopShortcutCompleted += OnDesktopShortcutCompleted;
@@ -85,26 +89,37 @@ public sealed class OverlayService : IOverlayService
     }
 
     private void OnLaunchCompleted(object? sender, ItemLaunchResult result)
-        => LaunchResultDialogHelper.HandleFailure(result, _itemLauncher, _logger, "آیکون شناور");
+        => LaunchResultDialogHelper.HandleFailure(
+            result,
+            _itemLauncher,
+            _logger,
+            _localization.GetString("App.OverlaySource"));
 
     private void OnDesktopShortcutCompleted(object? sender, DesktopShortcutUpdateResult result)
     {
+        var title = _localization.GetString("App.Title");
+        var options = AppLocalization.GetMessageBoxOptions();
+
         if (!result.Succeeded)
         {
             MessageBox.Show(
                 result.Message,
-                "Jellyfin Desktop Slideshow",
+                title,
                 MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+                MessageBoxImage.Warning,
+                MessageBoxResult.OK,
+                options);
             return;
         }
 
         StateUpdated?.Invoke(this, EventArgs.Empty);
         MessageBox.Show(
             result.Message,
-            "Jellyfin Desktop Slideshow",
+            title,
             MessageBoxButton.OK,
-            MessageBoxImage.Information);
+            MessageBoxImage.Information,
+            MessageBoxResult.OK,
+            options);
     }
 
     private void OnHideOverlayRequested(object? sender, EventArgs e)

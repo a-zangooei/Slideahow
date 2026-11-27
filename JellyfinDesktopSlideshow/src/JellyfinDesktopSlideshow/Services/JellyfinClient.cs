@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using JellyfinDesktopSlideshow.Infrastructure;
+using JellyfinDesktopSlideshow.Localization;
 using JellyfinDesktopSlideshow.Models;
 
 namespace JellyfinDesktopSlideshow.Services;
@@ -20,11 +21,16 @@ public sealed class JellyfinClient : IJellyfinClient
 
     private readonly HttpClient _httpClient;
     private readonly ILoggingService _logger;
+    private readonly ILocalizationService _localization;
 
-    public JellyfinClient(HttpClient httpClient, ILoggingService logger)
+    public JellyfinClient(
+        HttpClient httpClient,
+        ILoggingService logger,
+        ILocalizationService? localization = null)
     {
         _httpClient = httpClient;
         _logger = logger;
+        _localization = localization ?? AppLocalization.Current;
     }
 
     public async Task<ServerPublicInfo> GetPublicServerInfoAsync(Uri serverUri, CancellationToken cancellationToken = default)
@@ -33,14 +39,14 @@ public sealed class JellyfinClient : IJellyfinClient
         using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
 
         using var response = await SendAsync(request, cancellationToken);
-        EnsureSuccess(response, "برقراری ارتباط با سرور Jellyfin ناموفق بود.");
+        EnsureSuccess(response, _localization.GetString("Jellyfin.Error.ConnectFailed"));
 
         var dto = await DeserializeAsync<PublicSystemInfoDto>(response, cancellationToken);
         if (string.IsNullOrWhiteSpace(dto.Id) || string.IsNullOrWhiteSpace(dto.Version))
         {
             throw new JellyfinApiException(
                 JellyfinErrorKind.InvalidResponse,
-                "پاسخ سرور در مسیر /System/Info/Public ناقص یا غیرمنتظره است.");
+                _localization.GetString("Jellyfin.Error.InvalidPublicInfo"));
         }
 
         return new ServerPublicInfo
@@ -81,11 +87,11 @@ public sealed class JellyfinClient : IJellyfinClient
         {
             throw new JellyfinApiException(
                 JellyfinErrorKind.Unauthorized,
-                "نام کاربری یا رمز عبور اشتباه است.",
+                _localization.GetString("Jellyfin.Error.BadCredentials"),
                 response.StatusCode);
         }
 
-        EnsureSuccess(response, "ورود به حساب Jellyfin ناموفق بود.");
+        EnsureSuccess(response, _localization.GetString("Jellyfin.Error.LoginFailed"));
 
         var dto = await DeserializeAsync<AuthenticationResultDto>(response, cancellationToken);
         if (string.IsNullOrWhiteSpace(dto.AccessToken) ||
@@ -94,7 +100,7 @@ public sealed class JellyfinClient : IJellyfinClient
         {
             throw new JellyfinApiException(
                 JellyfinErrorKind.InvalidResponse,
-                "پاسخ ورود سرور فاقد توکن یا شناسهٔ کاربر است.");
+                _localization.GetString("Jellyfin.Error.MissingAuthToken"));
         }
 
         return new AuthResult
@@ -122,7 +128,7 @@ public sealed class JellyfinClient : IJellyfinClient
             return false;
         }
 
-        EnsureSuccess(response, "اعتبارسنجی نشست کاربر ناموفق بود.");
+        EnsureSuccess(response, _localization.GetString("Jellyfin.Error.ValidateSessionFailed"));
         return true;
     }
 
@@ -145,7 +151,7 @@ public sealed class JellyfinClient : IJellyfinClient
             return false;
         }
 
-        EnsureSuccess(response, "اعتبارسنجی کلید API ناموفق بود.");
+        EnsureSuccess(response, _localization.GetString("Jellyfin.Error.ValidateApiKeyFailed"));
         return true;
     }
 
@@ -179,7 +185,7 @@ public sealed class JellyfinClient : IJellyfinClient
                 activeResponse = fallbackResponse;
             }
 
-            EnsureSuccess(activeResponse, "دریافت فهرست کتابخانه‌ها ناموفق بود.");
+            EnsureSuccess(activeResponse, _localization.GetString("Jellyfin.Error.FetchLibrariesFailed"));
             var result = await DeserializeAsync<BaseItemQueryResultDto>(activeResponse, cancellationToken);
 
             var libraries = new List<JellyfinLibrary>();
@@ -248,7 +254,7 @@ public sealed class JellyfinClient : IJellyfinClient
         ApplyMediaBrowserAuthorization(request, deviceId, accessToken);
 
         using var response = await SendAsync(request, cancellationToken);
-        EnsureSuccess(response, "دریافت فهرست عنوان‌های رسانه ناموفق بود.");
+        EnsureSuccess(response, _localization.GetString("Jellyfin.Error.FetchItemsFailed"));
 
         var dto = await DeserializeAsync<BaseItemQueryResultDto>(response, cancellationToken);
         var items = new List<MediaItem>();
@@ -303,7 +309,7 @@ public sealed class JellyfinClient : IJellyfinClient
             ApplyMediaBrowserAuthorization(request, deviceId, accessToken);
 
             using var response = await SendAsync(request, cancellationToken);
-            EnsureSuccess(response, "دریافت فهرست آثار عضو کالکشن ناموفق بود.");
+            EnsureSuccess(response, _localization.GetString("Jellyfin.Error.FetchCollectionFailed"));
 
             var dto = await DeserializeAsync<BaseItemQueryResultDto>(response, cancellationToken);
             var batchCount = dto.Items?.Count ?? 0;
@@ -390,7 +396,7 @@ public sealed class JellyfinClient : IJellyfinClient
         ApplyMediaBrowserAuthorization(request, deviceId, accessToken);
 
         using var response = await SendAsync(request, cancellationToken);
-        EnsureSuccess(response, "دریافت تصویر Backdrop از سرور ناموفق بود.");
+        EnsureSuccess(response, _localization.GetString("Jellyfin.Error.DownloadBackdropFailed"));
 
         var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
         var contentType = response.Content.Headers.ContentType?.MediaType;
@@ -408,7 +414,7 @@ public sealed class JellyfinClient : IJellyfinClient
         ApplyMediaBrowserAuthorization(request, deviceId, accessToken);
 
         using var response = await SendAsync(request, cancellationToken);
-        EnsureSuccess(response, "دریافت فهرست نشست‌های فعال ناموفق بود.");
+        EnsureSuccess(response, _localization.GetString("Jellyfin.Error.FetchSessionsFailed"));
 
         var dtos = await DeserializeAsync<List<SessionInfoDto>>(response, cancellationToken);
         return dtos
@@ -449,7 +455,7 @@ public sealed class JellyfinClient : IJellyfinClient
         ApplyMediaBrowserAuthorization(request, deviceId, accessToken);
 
         using var response = await SendAsync(request, cancellationToken);
-        EnsureSuccess(response, "ارسال دستور بازکردن عنوان به کلاینت Jellyfin ناموفق بود.");
+        EnsureSuccess(response, _localization.GetString("Jellyfin.Error.SendViewingFailed"));
     }
 
     public async Task LogoutAsync(
@@ -465,7 +471,7 @@ public sealed class JellyfinClient : IJellyfinClient
         using var response = await SendAsync(request, cancellationToken);
         if (response.StatusCode != HttpStatusCode.Unauthorized)
         {
-            EnsureSuccess(response, "خروج از نشست سرور انجام نشد.");
+            EnsureSuccess(response, _localization.GetString("Jellyfin.Error.LogoutFailed"));
         }
     }
 
@@ -504,7 +510,7 @@ public sealed class JellyfinClient : IJellyfinClient
             _logger.Warning($"Timeout در درخواست به {request.RequestUri?.AbsolutePath}");
             throw new JellyfinApiException(
                 JellyfinErrorKind.Timeout,
-                "پاسخ سرور بیش از حد طول کشید (Timeout).",
+                _localization.GetString("Jellyfin.Error.Timeout"),
                 innerException: ex);
         }
         catch (HttpRequestException ex)
@@ -512,12 +518,12 @@ public sealed class JellyfinClient : IJellyfinClient
             _logger.Warning($"خطای شبکه در ارتباط با {request.RequestUri?.AbsolutePath}: {ex.Message}");
             throw new JellyfinApiException(
                 JellyfinErrorKind.Unreachable,
-                "سرور Jellyfin در دسترس نیست. آدرس سرور و اتصال شبکه را بررسی کنید.",
+                _localization.GetString("Jellyfin.Error.Unreachable"),
                 innerException: ex);
         }
     }
 
-    private static void EnsureSuccess(HttpResponseMessage response, string fallbackMessage)
+    private void EnsureSuccess(HttpResponseMessage response, string fallbackMessage)
     {
         if (response.IsSuccessStatusCode)
         {
@@ -528,32 +534,32 @@ public sealed class JellyfinClient : IJellyfinClient
         {
             HttpStatusCode.Unauthorized => new JellyfinApiException(
                 JellyfinErrorKind.Unauthorized,
-                "نشست شما منقضی یا نامعتبر شده است. لطفاً دوباره وارد شوید.",
+                _localization.GetString("Jellyfin.Error.Unauthorized"),
                 response.StatusCode),
             HttpStatusCode.Forbidden => new JellyfinApiException(
                 JellyfinErrorKind.Forbidden,
-                "این حساب کاربری مجوز دسترسی به این بخش را ندارد.",
+                _localization.GetString("Jellyfin.Error.Forbidden"),
                 response.StatusCode),
             HttpStatusCode.BadRequest => new JellyfinApiException(
                 JellyfinErrorKind.BadRequestOrVersionMismatch,
-                "درخواست با این نسخه از سرور Jellyfin سازگار نیست یا شناسه نامعتبر است.",
+                _localization.GetString("Jellyfin.Error.BadRequest"),
                 response.StatusCode),
             HttpStatusCode.NotFound => new JellyfinApiException(
                 JellyfinErrorKind.NotFound,
-                "مسیر API در این نسخه از سرور یافت نشد.",
+                _localization.GetString("Jellyfin.Error.NotFound"),
                 response.StatusCode),
             >= HttpStatusCode.InternalServerError => new JellyfinApiException(
                 JellyfinErrorKind.ServerError,
-                "سرور Jellyfin خطای داخلی گزارش داد.",
+                _localization.GetString("Jellyfin.Error.ServerError"),
                 response.StatusCode),
             _ => new JellyfinApiException(
                 JellyfinErrorKind.ServerError,
-                $"{fallbackMessage} (کد خطا: {(int)response.StatusCode})",
+                _localization.Format("Jellyfin.Error.ServerErrorCodeFormat", fallbackMessage, (int)response.StatusCode),
                 response.StatusCode)
         };
     }
 
-    private static async Task<T> DeserializeAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
+    private async Task<T> DeserializeAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         try
         {
@@ -562,7 +568,7 @@ public sealed class JellyfinClient : IJellyfinClient
             {
                 throw new JellyfinApiException(
                     JellyfinErrorKind.InvalidResponse,
-                    "پاسخ سرور خالی است.");
+                    _localization.GetString("Jellyfin.Error.EmptyResponse"));
             }
 
             return data;
@@ -571,7 +577,7 @@ public sealed class JellyfinClient : IJellyfinClient
         {
             throw new JellyfinApiException(
                 JellyfinErrorKind.InvalidResponse,
-                "فرمت JSON پاسخ سرور معتبر نیست.",
+                _localization.GetString("Jellyfin.Error.InvalidJson"),
                 response.StatusCode,
                 ex);
         }

@@ -2,6 +2,7 @@ using System.IO;
 using System.Net;
 using System.Text.Json;
 using JellyfinDesktopSlideshow.Infrastructure;
+using JellyfinDesktopSlideshow.Localization;
 using JellyfinDesktopSlideshow.Models;
 
 namespace JellyfinDesktopSlideshow.Services;
@@ -13,32 +14,37 @@ public sealed class SettingsService : ISettingsService
         WriteIndented = true
     };
 
-    private readonly string _settingsFilePath;
     private readonly ILoggingService _logger;
+    private readonly ILocalizationService _localization;
 
+    public string SettingsFilePath { get; }
     public AppSettings Current { get; private set; } = new();
 
-    public SettingsService(ILoggingService logger, string? settingsFilePath = null)
+    public SettingsService(
+        ILoggingService logger,
+        string? settingsFilePath = null,
+        ILocalizationService? localization = null)
     {
         _logger = logger;
-        _settingsFilePath = settingsFilePath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "JellyfinDesktopSlideshow",
-            "settings.json");
+        _localization = localization ?? AppLocalization.Current;
+        SettingsFilePath = settingsFilePath ?? AppDataPaths.Default.SettingsFilePath;
     }
 
     public AppSettings Load()
     {
         try
         {
-            if (!File.Exists(_settingsFilePath))
+            if (!File.Exists(SettingsFilePath))
             {
-                Current = new AppSettings();
+                Current = new AppSettings
+                {
+                    Language = _localization.NormalizeLanguageCode(null)
+                };
                 Save(Current);
                 return Current;
             }
 
-            var json = File.ReadAllText(_settingsFilePath);
+            var json = File.ReadAllText(SettingsFilePath);
             var loaded = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
             Current = loaded ?? new AppSettings();
 
@@ -83,13 +89,17 @@ public sealed class SettingsService : ISettingsService
             Current.PlaybackTarget ??= new PlaybackTargetSettings();
             Current.SelectedLibraryIds ??= [];
             Current.IncludedItemTypes ??= ["Movie", "Series"];
+            Current.Language = _localization.NormalizeLanguageCode(Current.Language);
 
             return Current;
         }
         catch (Exception ex)
         {
             _logger.Error("خطا در خواندن فایل تنظیمات؛ تنظیمات پیش‌فرض بارگذاری شد.", ex);
-            Current = new AppSettings();
+            Current = new AppSettings
+            {
+                Language = _localization.NormalizeLanguageCode(null)
+            };
             return Current;
         }
     }
@@ -98,17 +108,26 @@ public sealed class SettingsService : ISettingsService
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        var directory = Path.GetDirectoryName(_settingsFilePath);
+        var directory = Path.GetDirectoryName(SettingsFilePath);
         if (!string.IsNullOrWhiteSpace(directory))
         {
             Directory.CreateDirectory(directory);
         }
 
         var json = JsonSerializer.Serialize(settings, JsonOptions);
-        var tempPath = $"{_settingsFilePath}.tmp";
+        var tempPath = $"{SettingsFilePath}.tmp";
         File.WriteAllText(tempPath, json);
-        File.Move(tempPath, _settingsFilePath, overwrite: true);
+        File.Move(tempPath, SettingsFilePath, overwrite: true);
         Current = settings;
+    }
+
+    public void ResetInMemoryToDefaults()
+    {
+        var activeLanguage = _localization.CurrentLanguage.Code;
+        Current = new AppSettings
+        {
+            Language = activeLanguage
+        };
     }
 
     public bool TryValidateServerUrl(string rawUrl, out Uri? normalizedUri, out string? errorMessage)
@@ -118,26 +137,26 @@ public sealed class SettingsService : ISettingsService
 
         if (string.IsNullOrWhiteSpace(rawUrl))
         {
-            errorMessage = "آدرس سرور Jellyfin را وارد کنید.";
+            errorMessage = _localization.GetString("Validation.ServerUrl.Empty");
             return false;
         }
 
         var trimmed = rawUrl.Trim().TrimEnd('/');
         if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var parsed))
         {
-            errorMessage = "فرمت آدرس سرور معتبر نیست. مثال: http://192.168.1.10:8096";
+            errorMessage = _localization.GetString("Validation.ServerUrl.Format");
             return false;
         }
 
         if (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps)
         {
-            errorMessage = "آدرس سرور باید با http:// یا https:// شروع شود.";
+            errorMessage = _localization.GetString("Validation.ServerUrl.Scheme");
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(parsed.Host))
         {
-            errorMessage = "نام میزبان یا IP سرور نامعتبر است.";
+            errorMessage = _localization.GetString("Validation.ServerUrl.Host");
             return false;
         }
 

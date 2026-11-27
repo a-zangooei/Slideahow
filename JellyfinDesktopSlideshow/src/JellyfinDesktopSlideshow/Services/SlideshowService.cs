@@ -1,4 +1,5 @@
 using JellyfinDesktopSlideshow.Infrastructure;
+using JellyfinDesktopSlideshow.Localization;
 using JellyfinDesktopSlideshow.Models;
 
 namespace JellyfinDesktopSlideshow.Services;
@@ -13,6 +14,7 @@ public sealed class SlideshowService : ISlideshowService
     private readonly ISlideshowTimer _timer;
     private readonly ILoggingService _logger;
     private readonly ICurrentWallpaperItemStore? _currentItemStore;
+    private readonly ILocalizationService _localization;
     private readonly SemaphoreSlim _transitionGate = new(1, 1);
 
     private readonly List<MediaItem> _items = [];
@@ -20,10 +22,7 @@ public sealed class SlideshowService : ISlideshowService
     private int _historyCursor = -1;
     private int _sequentialIndex = -1;
 
-    public SlideshowState CurrentState { get; private set; } = new()
-    {
-        StatusMessage = "اسلایدشو آماده است."
-    };
+    public SlideshowState CurrentState { get; private set; }
 
     public event EventHandler<SlideshowState>? StateChanged;
 
@@ -32,13 +31,20 @@ public sealed class SlideshowService : ISlideshowService
         ISettingsService settingsService,
         ISlideshowTimer timer,
         ILoggingService logger,
-        ICurrentWallpaperItemStore? currentItemStore = null)
+        ICurrentWallpaperItemStore? currentItemStore = null,
+        ILocalizationService? localization = null)
     {
         _imageService = imageService;
         _settingsService = settingsService;
         _timer = timer;
         _logger = logger;
         _currentItemStore = currentItemStore;
+        _localization = localization ?? AppLocalization.Current;
+
+        CurrentState = new SlideshowState
+        {
+            StatusMessage = _localization.GetString("Slideshow.Ready")
+        };
 
         _timer.Interval = GetConfiguredInterval();
         _timer.Tick += OnTimerTick;
@@ -72,8 +78,8 @@ public sealed class SlideshowService : ISlideshowService
             TotalItemsCount = _items.Count,
             ConsecutiveFailureCount = CurrentState.ConsecutiveFailureCount,
             StatusMessage = _items.Count == 0
-                ? "فهرست رسانه‌ها خالی است."
-                : $"{_items.Count} عنوان در فهرست اسلایدشو آماده است."
+                ? _localization.GetString("Slideshow.EmptyList")
+                : _localization.Format("Slideshow.ReadyCountFormat", _items.Count)
         });
     }
 
@@ -86,7 +92,7 @@ public sealed class SlideshowService : ISlideshowService
                 IsRunning = false,
                 IsPaused = false,
                 TotalItemsCount = 0,
-                StatusMessage = "عنوانی برای شروع اسلایدشو وجود ندارد."
+                StatusMessage = _localization.GetString("Slideshow.NoItemsToStart")
             });
             return;
         }
@@ -103,7 +109,7 @@ public sealed class SlideshowService : ISlideshowService
                 IsPaused = false,
                 CanGoPrevious = _historyCursor > 0,
                 TotalItemsCount = _items.Count,
-                StatusMessage = "در حال شروع اسلایدشو..."
+                StatusMessage = _localization.GetString("Slideshow.Starting")
             });
 
             await AdvanceInternalAsync(cancellationToken);
@@ -119,7 +125,7 @@ public sealed class SlideshowService : ISlideshowService
                 CanGoPrevious = _historyCursor > 0,
                 TotalItemsCount = _items.Count,
                 ConsecutiveFailureCount = CurrentState.ConsecutiveFailureCount,
-                StatusMessage = "اسلایدشو در حال اجرا است."
+                StatusMessage = _localization.GetString("Slideshow.Running")
             });
         }
 
@@ -146,7 +152,7 @@ public sealed class SlideshowService : ISlideshowService
             CanGoPrevious = _historyCursor > 0,
             TotalItemsCount = _items.Count,
             ConsecutiveFailureCount = CurrentState.ConsecutiveFailureCount,
-            StatusMessage = "اسلایدشو متوقف (مکث) شد."
+            StatusMessage = _localization.GetString("Slideshow.Paused")
         });
     }
 
@@ -169,7 +175,7 @@ public sealed class SlideshowService : ISlideshowService
             CanGoPrevious = _historyCursor > 0,
             TotalItemsCount = _items.Count,
             ConsecutiveFailureCount = CurrentState.ConsecutiveFailureCount,
-            StatusMessage = "اسلایدشو ادامه یافت."
+            StatusMessage = _localization.GetString("Slideshow.Resumed")
         });
     }
 
@@ -223,7 +229,7 @@ public sealed class SlideshowService : ISlideshowService
                     CanGoPrevious = _historyCursor > 0,
                     TotalItemsCount = _items.Count,
                     ConsecutiveFailureCount = 0,
-                    StatusMessage = $"عنوان قبلی: {FormatItemLabel(targetItem)}"
+                    StatusMessage = _localization.Format("Slideshow.PreviousItemFormat", FormatItemLabel(targetItem))
                 });
             }
             else
@@ -273,7 +279,7 @@ public sealed class SlideshowService : ISlideshowService
             CanGoPrevious = false,
             TotalItemsCount = _items.Count,
             ConsecutiveFailureCount = 0,
-            StatusMessage = "اسلایدشو متوقف شد."
+            StatusMessage = _localization.GetString("Slideshow.Stopped")
         });
     }
 
@@ -382,7 +388,7 @@ public sealed class SlideshowService : ISlideshowService
                 CanGoPrevious = _historyCursor > 0,
                 TotalItemsCount = _items.Count,
                 ConsecutiveFailureCount = CurrentState.ConsecutiveFailureCount,
-                StatusMessage = "هیچ عنوانی در فهرست فعلی تصویر Backdrop یا جایگزین معتبر ندارد."
+                StatusMessage = _localization.GetString("Slideshow.NoValidBackdrop")
             });
         }
         finally
@@ -470,7 +476,7 @@ public sealed class SlideshowService : ISlideshowService
                 CanGoPrevious = _historyCursor > 0,
                 TotalItemsCount = _items.Count,
                 ConsecutiveFailureCount = failures,
-                StatusMessage = $"اسلایدشو به دلیل خطای ارتباط متوقف شد: {reason}"
+                StatusMessage = _localization.Format("Slideshow.PausedOnErrorFormat", reason)
             });
             return;
         }
@@ -492,7 +498,7 @@ public sealed class SlideshowService : ISlideshowService
             CanGoPrevious = _historyCursor > 0,
             TotalItemsCount = _items.Count,
             ConsecutiveFailureCount = failures,
-            StatusMessage = $"تصویر قبلی حفظ شد ({reason})."
+            StatusMessage = _localization.Format("Slideshow.KeptPreviousOnErrorFormat", reason)
         });
     }
 
@@ -512,7 +518,7 @@ public sealed class SlideshowService : ISlideshowService
     }
 
     private static string FormatItemLabel(MediaItem item)
-        => item.ProductionYear.HasValue ? $"{item.Name} ({item.ProductionYear})" : item.Name;
+        => BidiTextFormatter.FormatTitle(item.Name, item.ProductionYear);
 
     private void PublishState(SlideshowState state)
     {

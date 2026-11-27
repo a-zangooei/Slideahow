@@ -1,4 +1,5 @@
 using JellyfinDesktopSlideshow.Infrastructure;
+using JellyfinDesktopSlideshow.Localization;
 using JellyfinDesktopSlideshow.Models;
 
 namespace JellyfinDesktopSlideshow.Services;
@@ -12,17 +13,20 @@ public sealed class CurrentItemLaunchCoordinator : ICurrentItemLaunchCoordinator
     private readonly ICurrentWallpaperItemStore _itemStore;
     private readonly IItemLauncher _itemLauncher;
     private readonly ILoggingService _logger;
+    private readonly ILocalizationService _localization;
 
     public CurrentItemLaunchCoordinator(
         ICurrentWallpaperItemStore itemStore,
         IItemLauncher itemLauncher,
         ILoggingService logger,
-        ISlideshowService? slideshowService = null)
+        ISlideshowService? slideshowService = null,
+        ILocalizationService? localization = null)
     {
         _itemStore = itemStore;
         _itemLauncher = itemLauncher;
         _logger = logger;
         _slideshowService = slideshowService;
+        _localization = localization ?? AppLocalization.Current;
     }
 
     public MediaItem? ResolveCurrentItem(MediaItem? preferredFallbackItem = null)
@@ -60,7 +64,7 @@ public sealed class CurrentItemLaunchCoordinator : ICurrentItemLaunchCoordinator
         if (item is null)
         {
             _logger.Warning("درخواست باز کردن عنوان فعلی به دلیل نبودن اطلاعات عنوان معتبر متوقف شد.");
-            return new ItemLaunchResult(false, MissingItemErrorMessage);
+            return new ItemLaunchResult(false, _localization.GetString("Launch.Error.MissingItem"));
         }
 
         return await _itemLauncher.OpenItemAsync(item, cancellationToken);

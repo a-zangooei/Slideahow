@@ -72,13 +72,23 @@ public static class ImageAspectFilter
 
         if (aspectRatio < minRatio)
         {
-            rejectionReason = $"تصویر عمودی یا مربعی است ({width}×{height}، نسبت {aspectRatio:F2} کمتر از {minRatio:F2}).";
+            rejectionReason = Localization.AppLocalization.Current.Format(
+                "Image.Aspect.PortraitOrSquareFormat",
+                width,
+                height,
+                aspectRatio,
+                minRatio);
             return false;
         }
 
         if (aspectRatio > maxRatio)
         {
-            rejectionReason = $"بنر خیلی دراز است ({width}×{height}، نسبت {aspectRatio:F2} بیشتر از {maxRatio:F2}).";
+            rejectionReason = Localization.AppLocalization.Current.Format(
+                "Image.Aspect.TooWideBannerFormat",
+                width,
+                height,
+                aspectRatio,
+                maxRatio);
             return false;
         }
 

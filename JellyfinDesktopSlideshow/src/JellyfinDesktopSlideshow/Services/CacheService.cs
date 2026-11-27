@@ -15,11 +15,7 @@ public sealed class CacheService : ICacheService
     public CacheService(ILoggingService logger, string? cacheDirectory = null)
     {
         _logger = logger;
-        CacheDirectory = cacheDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "JellyfinDesktopSlideshow",
-            "cache",
-            "backdrops");
+        CacheDirectory = cacheDirectory ?? AppDataPaths.Default.BackdropCacheDirectory;
     }
 
     public string? TryGetCachedFile(string itemId, int imageIndex, string? tag)

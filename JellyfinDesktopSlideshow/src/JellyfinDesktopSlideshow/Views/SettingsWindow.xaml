@@ -1,16 +1,19 @@
 <Window x:Class="JellyfinDesktopSlideshow.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="تنظیمات — Jellyfin Desktop Slideshow"
-        Width="780"
-        Height="620"
-        MinWidth="680"
-        MinHeight="520"
-        FlowDirection="RightToLeft"
+        xmlns:views="clr-namespace:JellyfinDesktopSlideshow.Views"
+        xmlns:loc="clr-namespace:JellyfinDesktopSlideshow.Localization"
+        Title="{Binding [Settings.WindowTitle], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+        Width="820"
+        Height="650"
+        MinWidth="700"
+        MinHeight="540"
+        FlowDirection="{Binding CurrentFlowDirection, Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
         WindowStartupLocation="CenterOwner"
         Background="#F4F6F9">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <views:DynamicTextFlowDirectionConverter x:Key="DynamicFlowDirection" />
     </Window.Resources>
 
     <Grid Margin="16">
@@ -20,20 +23,20 @@
         </Grid.RowDefinitions>
 
         <TabControl Grid.Row="0" Background="#FFFFFF" BorderBrush="#DCE2EA">
-            <!-- ۱. اتصال به Jellyfin -->
-            <TabItem Header="۱. اتصال به سرور">
+            <!-- 1. Server Connection -->
+            <TabItem Header="{Binding [Settings.Tab1.Header], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
-                    <StackPanel MaxWidth="560" HorizontalAlignment="Left">
-                        <TextBlock Text="اتصال و احراز هویت سرور Jellyfin" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
+                    <StackPanel MaxWidth="580" HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding [Settings.Tab1.Title], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
 
-                        <TextBlock Text="آدرس سرور Jellyfin" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="{Binding [Settings.Tab1.ServerUrlLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                         <TextBox Text="{Binding ServerUrl, UpdateSourceTrigger=PropertyChanged}"
                                  FlowDirection="LeftToRight"
                                  Padding="8,6"
                                  Margin="0,0,0,10"
-                                 ToolTip="مثال: http://192.168.1.10:8096 یا https://media.example.com" />
+                                 ToolTip="{Binding [Settings.Tab1.ServerUrlToolTip], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" />
 
-                        <TextBlock Text="روش احراز هویت" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="{Binding [Settings.Tab1.AuthMethodLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                         <ComboBox ItemsSource="{Binding AuthMethodOptions}"
                                   SelectedValue="{Binding SelectedAuthMethod}"
                                   SelectedValuePath="Key"
@@ -42,15 +45,15 @@
                                   Margin="0,0,0,12" />
 
                         <StackPanel Visibility="{Binding IsApiKeyAuthSelected, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Text="کلید API سرور Jellyfin" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock Text="{Binding [Settings.Tab1.ApiKeyLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                             <PasswordBox x:Name="ApiKeyInput"
                                          FlowDirection="LeftToRight"
                                          Padding="8,6"
                                          Margin="0,0,0,8"
-                                         ToolTip="کلید ساخته شده در داشبورد Jellyfin ← Advanced ← API Keys" />
+                                         ToolTip="{Binding [Settings.Tab1.ApiKeyToolTip], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" />
 
                             <Border Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,12">
-                                <TextBlock Text="روش اصلی و پیشنهادی: در پنل مدیریت Jellyfin به مسیر Dashboard ← Advanced ← API Keys بروید، یک کلید جدید بسازید و اینجا وارد کنید. این کلید بدون نیاز به رمز عبور و بدون انقضای نشست، به‌صورت رمزنگاری‌شده در Windows Credential Manager ذخیره می‌شود و فقط در هدر امن Authorization: MediaBrowser ارسال می‌گردد."
+                                <TextBlock Text="{Binding [Settings.Tab1.ApiKeyInfo], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                            Foreground="#1E3A8A"
                                            FontSize="12"
                                            TextWrapping="Wrap" />
@@ -58,13 +61,13 @@
                         </StackPanel>
 
                         <StackPanel Visibility="{Binding IsPasswordAuthSelected, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Text="نام کاربری" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock Text="{Binding [Settings.Tab1.UsernameLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                             <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
                                      FlowDirection="LeftToRight"
                                      Padding="8,6"
                                      Margin="0,0,0,10" />
 
-                            <TextBlock Text="رمز عبور" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock Text="{Binding [Settings.Tab1.PasswordLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                             <PasswordBox x:Name="PasswordInput"
                                          FlowDirection="LeftToRight"
                                          Padding="8,6"
@@ -72,23 +75,23 @@
                         </StackPanel>
 
                         <WrapPanel Margin="0,0,0,14">
-                            <Button Content="تست اتصال"
+                            <Button Content="{Binding [Settings.Tab1.TestConnectionButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                     Command="{Binding TestConnectionCommand}"
                                     Padding="14,7"
                                     Margin="0,0,8,0" />
-                            <Button Content="اتصال و ذخیرهٔ کلید API"
+                            <Button Content="{Binding [Settings.Tab1.ConnectApiKeyButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                     Click="ConnectWithApiKeyButton_Click"
                                     Visibility="{Binding IsApiKeyAuthSelected, Converter={StaticResource BoolToVisibility}}"
                                     Padding="16,7"
                                     FontWeight="SemiBold"
                                     Margin="0,0,8,0" />
-                            <Button Content="ورود و ذخیرهٔ نشست"
+                            <Button Content="{Binding [Settings.Tab1.LoginButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                     Click="LoginButton_Click"
                                     Visibility="{Binding IsPasswordAuthSelected, Converter={StaticResource BoolToVisibility}}"
                                     Padding="16,7"
                                     FontWeight="SemiBold"
                                     Margin="0,0,8,0" />
-                            <Button Content="قطع اتصال / خروج"
+                            <Button Content="{Binding [Settings.Tab1.LogoutButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                     Command="{Binding LogoutCommand}"
                                     Padding="14,7" />
                         </WrapPanel>
@@ -96,7 +99,7 @@
                         <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="12">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="وضعیت: " FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding [Settings.Tab1.StatusPrefix], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" />
                                     <TextBlock Text="{Binding ConnectionStatus}" FontWeight="Bold" />
                                 </StackPanel>
                                 <TextBlock Text="{Binding ServerDetails}" Foreground="#475569" Margin="0,4,0,0" />
@@ -107,24 +110,24 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ۲. کتابخانه‌ها و نوع رسانه -->
-            <TabItem Header="۲. کتابخانه‌ها و رسانه">
+            <!-- 2. Libraries & Media -->
+            <TabItem Header="{Binding [Settings.Tab2.Header], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}">
                 <DockPanel Margin="16">
-                    <TextBlock DockPanel.Dock="Top" Text="انتخاب کتابخانه‌ها و نوع عنوان‌ها" FontSize="15" FontWeight="Bold" Margin="0,0,0,10" />
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding [Settings.Tab2.Title], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontSize="15" FontWeight="Bold" Margin="0,0,0,10" />
 
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
-                        <CheckBox Content="فیلم‌ها (Movie)" IsChecked="{Binding IncludeMovies}" Margin="0,0,18,0" />
-                        <CheckBox Content="سریال‌ها (Series)" IsChecked="{Binding IncludeSeries}" />
+                        <CheckBox Content="{Binding [Settings.Tab2.IncludeMovies], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" IsChecked="{Binding IncludeMovies}" Margin="0,0,18,0" />
+                        <CheckBox Content="{Binding [Settings.Tab2.IncludeSeries], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" IsChecked="{Binding IncludeSeries}" />
                     </StackPanel>
 
                     <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
                         <TextBlock Text="{Binding ItemsSummary}" Foreground="#334155" Margin="0,0,0,8" />
                         <WrapPanel>
-                            <Button Content="بروزرسانی فهرست کتابخانه‌ها"
+                            <Button Content="{Binding [Settings.Tab2.RefreshLibrariesButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                     Command="{Binding LoadLibrariesCommand}"
                                     Padding="14,7"
                                     Margin="0,0,8,0" />
-                            <Button Content="اعمال فیلتر و دریافت عنوان‌ها"
+                            <Button Content="{Binding [Settings.Tab2.ApplyFilterButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                     Command="{Binding ApplyMediaSelectionCommand}"
                                     Padding="16,7"
                                     FontWeight="SemiBold" />
@@ -136,8 +139,13 @@
                             <DataTemplate>
                                 <CheckBox IsChecked="{Binding IsSelected}" Margin="6,4">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding Name}" FontWeight="Medium" />
-                                        <TextBlock Text="{Binding CollectionType, StringFormat=' ({0})'}" Foreground="#64748B" FontSize="11" />
+                                        <TextBlock Text="{Binding Name}"
+                                                   FlowDirection="{Binding Name, Converter={StaticResource DynamicFlowDirection}}"
+                                                   FontWeight="Medium" />
+                                        <TextBlock Text="{Binding CollectionType, StringFormat=' ({0})'}"
+                                                   FlowDirection="LeftToRight"
+                                                   Foreground="#64748B"
+                                                   FontSize="11" />
                                     </StackPanel>
                                 </CheckBox>
                             </DataTemplate>
@@ -146,15 +154,15 @@
                 </DockPanel>
             </TabItem>
 
-            <!-- ۳. تنظیمات اسلایدشو و والپیپر -->
-            <TabItem Header="۳. اسلایدشو و والپیپر">
+            <!-- 3. Slideshow & Wallpaper -->
+            <TabItem Header="{Binding [Settings.Tab3.Header], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
-                    <StackPanel MaxWidth="560" HorizontalAlignment="Left">
-                        <TextBlock Text="زمان‌بندی، ترتیب نمایش و رفتار والپیپر دسکتاپ" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
+                    <StackPanel MaxWidth="580" HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding [Settings.Tab3.Title], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
 
                         <Grid Margin="0,0,0,12">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="190" />
+                                <ColumnDefinition Width="220" />
                                 <ColumnDefinition Width="120" />
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
@@ -163,18 +171,18 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="فاصلهٔ تغییر تصویر (ثانیه):" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [Settings.Tab3.IntervalLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" VerticalAlignment="Center" />
                             <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding SlideshowIntervalSeconds, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
 
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="عدم تکرار متوالی (تعداد عنوان):" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [Settings.Tab3.NonRepeatLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" VerticalAlignment="Center" />
                             <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding NonRepeatHistoryCount, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
                         </Grid>
 
-                        <CheckBox Content="پخش تصادفی عنوان‌ها (در غیر این صورت ترتیبی)"
+                        <CheckBox Content="{Binding [Settings.Tab3.RandomOrder], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                   IsChecked="{Binding IsRandomOrder}"
                                   Margin="0,0,0,12" />
 
-                        <TextBlock Text="رفتار هنگام قطع اتصال سرور:" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="{Binding [Settings.Tab3.OfflineBehaviorLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                         <ComboBox ItemsSource="{Binding OfflineBehaviorOptions}"
                                   SelectedValue="{Binding SelectedOfflineBehavior}"
                                   SelectedValuePath="Key"
@@ -184,11 +192,11 @@
 
                         <Border BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Padding="0,12,0,0">
                             <StackPanel>
-                                <CheckBox Content="اعمال خودکار تصویر اسلایدشو روی والپیپر ویندوز"
+                                <CheckBox Content="{Binding [Settings.Tab3.ApplyToWallpaper], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                           IsChecked="{Binding ApplyToDesktopWallpaper}"
                                           Margin="0,0,0,8" />
 
-                                <TextBlock Text="حالت چینش تصویر روی صفحه:" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBlock Text="{Binding [Settings.Tab3.FitModeLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                                 <ComboBox ItemsSource="{Binding WallpaperFitModes}"
                                           SelectedValue="{Binding SelectedWallpaperFitMode}"
                                           SelectedValuePath="Key"
@@ -196,7 +204,7 @@
                                           Padding="8,5"
                                           Margin="0,0,0,10" />
 
-                                <CheckBox Content="بازگردانی والپیپر اولیهٔ ویندوز هنگام خروج کامل از برنامه"
+                                <CheckBox Content="{Binding [Settings.Tab3.RestoreOnExit], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                           IsChecked="{Binding RestoreWallpaperOnExit}"
                                           Margin="0,0,0,8" />
 
@@ -207,13 +215,13 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ۴. آیکون دسکتاپ -->
-            <TabItem Header="۴. آیکون دسکتاپ">
+            <!-- 4. Desktop Icon -->
+            <TabItem Header="{Binding [Settings.Tab4.Header], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
-                    <StackPanel MaxWidth="520" HorizontalAlignment="Left">
-                        <TextBlock Text="حالت نمایش آیکون قابل‌کلیک برای باز کردن Jellyfin" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
+                    <StackPanel MaxWidth="560" HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding [Settings.Tab4.Title], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
 
-                        <TextBlock Text="روش نمایش روی دسکتاپ:" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="{Binding [Settings.Tab4.ModeLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                         <ComboBox ItemsSource="{Binding DesktopIconModes}"
                                   SelectedValue="{Binding SelectedDesktopIconMode}"
                                   SelectedValuePath="Key"
@@ -222,17 +230,17 @@
                                   Margin="0,0,0,10" />
 
                         <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,14">
-                            <TextBlock Text="در حالت «آیکون استاندارد روی دسکتاپ»، یک میان‌بُر واقعی با نام «باز کردن در Jellyfin» کنار سایر آیکون‌های دسکتاپ ساخته می‌شود که می‌توانید آن را مانند بقیهٔ آیکون‌ها جابه‌جا کنید و با دابل‌کلیک، فیلم یا سریال در حال نمایش را باز نمایید."
+                            <TextBlock Text="{Binding [Settings.Tab4.ShortcutNote], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                        Foreground="#475569"
                                        FontSize="12"
                                        TextWrapping="Wrap" />
                         </Border>
 
-                        <TextBlock Text="تنظیمات ظاهر و جایگاه آیکون شناور:" FontWeight="SemiBold" Margin="0,0,0,8" />
+                        <TextBlock Text="{Binding [Settings.Tab4.OverlaySettingsLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,8" />
 
                         <Grid IsEnabled="{Binding IsFloatingOverlayEnabled}">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="200" />
                                 <ColumnDefinition Width="120" />
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
@@ -245,20 +253,20 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="موقعیت افقی (X):" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [Settings.Tab4.OverlayLeftLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" VerticalAlignment="Center" />
                             <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding OverlayLeft, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
 
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="موقعیت عمودی (Y):" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [Settings.Tab4.OverlayTopLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" VerticalAlignment="Center" />
                             <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding OverlayTop, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
 
-                            <TextBlock Grid.Row="4" Grid.Column="0" Text="اندازهٔ آیکون (24 تا 96 پیکسل):" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="{Binding [Settings.Tab4.OverlaySizeLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" VerticalAlignment="Center" />
                             <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding OverlaySize, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
 
-                            <TextBlock Grid.Row="6" Grid.Column="0" Text="شفافیت (0.2 تا 1.0):" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="6" Grid.Column="0" Text="{Binding [Settings.Tab4.OverlayOpacityLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" VerticalAlignment="Center" />
                             <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding OverlayOpacity, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
                         </Grid>
 
-                        <TextBlock Text="تغییرات بلافاصله اعمال می‌شوند و در حالت شناور، مختصات در محدودهٔ نمایشگرهای فعال تنظیم می‌گردد."
+                        <TextBlock Text="{Binding [Settings.Tab4.OverlayNote], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                    Foreground="#64748B"
                                    FontSize="12"
                                    TextWrapping="Wrap"
@@ -267,13 +275,13 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ۵. مقصد باز کردن عنوان -->
-            <TabItem Header="۵. مقصد باز کردن عنوان">
+            <!-- 5. Launch Target -->
+            <TabItem Header="{Binding [Settings.Tab5.Header], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
-                    <StackPanel MaxWidth="560" HorizontalAlignment="Left">
-                        <TextBlock Text="مقصد باز شدن عنوان هنگام کلیک روی آیکون دسکتاپ" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
+                    <StackPanel MaxWidth="580" HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding [Settings.Tab5.Title], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
 
-                        <TextBlock Text="انتخاب مقصد:" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="{Binding [Settings.Tab5.TargetLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                         <ComboBox ItemsSource="{Binding PlaybackTargetOptions}"
                                   SelectedValue="{Binding SelectedPlaybackTargetType}"
                                   SelectedValuePath="Key"
@@ -282,17 +290,17 @@
                                   Margin="0,0,0,12" />
 
                         <StackPanel Visibility="{Binding IsCustomUrlTargetSelected, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,12">
-                            <TextBlock Text="الگوی URL سفارشی (فقط http/https):" FontWeight="SemiBold" Margin="0,0,0,4" />
+                            <TextBlock Text="{Binding [Settings.Tab5.CustomUrlLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                             <TextBox Text="{Binding CustomUrlTemplate, UpdateSourceTrigger=PropertyChanged}"
                                      FlowDirection="LeftToRight"
                                      Padding="8,6"
-                                     ToolTip="{}{baseUrl}/web/index.html#!/details?id={itemId}&amp;serverId={serverId}" />
-                            <TextBlock Text="متغیرهای مجاز: {baseUrl}، {itemId}، {serverId}" Foreground="#64748B" FontSize="11" Margin="0,4,0,0" />
+                                     ToolTip="{Binding [Settings.Tab5.CustomUrlToolTip], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" />
+                            <TextBlock Text="{Binding [Settings.Tab5.AllowedVariables], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" Foreground="#64748B" FontSize="11" Margin="0,4,0,0" />
                             <TextBlock Text="{Binding CustomUrlValidationMessage}" Foreground="#B91C1C" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" />
                         </StackPanel>
 
                         <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="12">
-                            <TextBlock Text="نکته: در حالت «برنامهٔ Jellyfin دسکتاپ»، برنامه از طریق API رسمی نشست‌های Jellyfin عنوان را روی کلاینت فعال باز می‌کند و اگر برنامه نصب یا فعال نباشد، پیشنهاد باز کردن در مرورگر را نمایش می‌دهد."
+                            <TextBlock Text="{Binding [Settings.Tab5.DesktopClientNote], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                        Foreground="#475569"
                                        FontSize="12"
                                        TextWrapping="Wrap" />
@@ -301,15 +309,15 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ۶. کش و تصویر جایگزین -->
-            <TabItem Header="۶. کش و تصویر جایگزین">
+            <!-- 6. Cache & Fallback -->
+            <TabItem Header="{Binding [Settings.Tab6.Header], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
-                    <StackPanel MaxWidth="560" HorizontalAlignment="Left">
-                        <TextBlock Text="مدیریت کش محلی، انتخاب Backdrop و تصویر جایگزین" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
+                    <StackPanel MaxWidth="580" HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding [Settings.Tab6.Title], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
 
                         <Grid Margin="0,0,0,12">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="210" />
+                                <ColumnDefinition Width="240" />
                                 <ColumnDefinition Width="120" />
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
@@ -320,29 +328,29 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="حداکثر حجم کش (مگابایت):" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [Settings.Tab6.MaxCacheSizeLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" VerticalAlignment="Center" />
                             <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding MaxCacheSizeMb, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
 
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="حداکثر عمر فایل کش (روز):" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [Settings.Tab6.MaxCacheAgeLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" VerticalAlignment="Center" />
                             <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding MaxCacheAgeDays, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
 
-                            <TextBlock Grid.Row="4" Grid.Column="0" Text="شمارهٔ Backdrop ترجیحی (از 0):" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="{Binding [Settings.Tab6.PreferredBackdropLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" VerticalAlignment="Center" />
                             <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding BackdropIndexPreference, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
                         </Grid>
 
-                        <CheckBox Content="انتخاب تصادفی بین Backdropهای هر عنوان"
+                        <CheckBox Content="{Binding [Settings.Tab6.RandomBackdrop], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                   IsChecked="{Binding RandomBackdropPerItem}"
                                   Margin="0,0,0,12" />
 
                         <Border BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,0,0,12">
                             <StackPanel>
-                                <TextBlock Text="فیلتر ابعاد و نسبت تصویر Backdrop" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                <TextBlock Text="{Binding [Settings.Tab6.AspectFilterTitle], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,8" />
 
-                                <CheckBox Content="حذف خودکار بنرهای خیلی دراز، تصاویر مربعی و عمودی (نامناسب برای والپیپر)"
+                                <CheckBox Content="{Binding [Settings.Tab6.FilterAspectRatios], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                           IsChecked="{Binding FilterNonWallpaperAspectRatios}"
                                           Margin="0,0,0,8" />
 
-                                <TextBlock Text="سطح فیلتر نسبت تصویر:" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBlock Text="{Binding [Settings.Tab6.AspectPresetLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                                 <ComboBox ItemsSource="{Binding BackdropAspectFilterPresets}"
                                           SelectedValue="{Binding SelectedBackdropAspectFilterPreset}"
                                           SelectedValuePath="Key"
@@ -353,7 +361,7 @@
 
                                 <Grid IsEnabled="{Binding IsCustomAspectRatioEnabled}" Margin="0,0,0,8">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="210" />
+                                        <ColumnDefinition Width="240" />
                                         <ColumnDefinition Width="120" />
                                     </Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions>
@@ -362,14 +370,14 @@
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="حداقل نسبت مجاز (عرض به ارتفاع):" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding [Settings.Tab6.MinAspectLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" VerticalAlignment="Center" />
                                     <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding MinBackdropAspectRatio, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
 
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="حداکثر نسبت مجاز (عرض به ارتفاع):" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{Binding [Settings.Tab6.MaxAspectLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" VerticalAlignment="Center" />
                                     <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding MaxBackdropAspectRatio, UpdateSourceTrigger=LostFocus}" FlowDirection="LeftToRight" Padding="6,4" />
                                 </Grid>
 
-                                <TextBlock Text="در حالت پیشنهادی، والپیپرهای عریض استاندارد (مانند 16:9، 16:10 و 21:9) حفظ می‌شوند و بنرهای باریک یا تصاویر مربعی و عمودی فیلتر می‌گردند. اگر تصویر نامناسب باشد، سایر Backdropهای همان عنوان بررسی می‌شوند و در نبود تصویر مناسب، عنوان رد خواهد شد."
+                                <TextBlock Text="{Binding [Settings.Tab6.AspectFilterNote], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                            Foreground="#64748B"
                                            FontSize="12"
                                            TextWrapping="Wrap" />
@@ -378,29 +386,29 @@
 
                         <TextBlock Text="{Binding CacheSummary}" FontWeight="SemiBold" Foreground="#0F172A" Margin="0,0,0,8" />
                         <WrapPanel Margin="0,0,0,16">
-                            <Button Content="پاک‌سازی بر اساس محدودیت"
+                            <Button Content="{Binding [Settings.Tab6.PruneCacheButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                     Command="{Binding PruneCacheCommand}"
                                     Padding="12,6"
                                     Margin="0,0,8,0" />
-                            <Button Content="پاک‌سازی کامل کش"
+                            <Button Content="{Binding [Settings.Tab6.ClearCacheButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                     Command="{Binding ClearCacheCommand}"
                                     Padding="12,6" />
                         </WrapPanel>
 
                         <Border BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Padding="0,12,0,0">
                             <StackPanel>
-                                <TextBlock Text="تصویر جایگزین (هنگام نبود Backdrop):" FontWeight="SemiBold" Margin="0,0,0,4" />
+                                <TextBlock Text="{Binding [Settings.Tab6.FallbackImageLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                                 <TextBox Text="{Binding FallbackImagePath, Mode=OneWay}"
                                          IsReadOnly="True"
                                          FlowDirection="LeftToRight"
                                          Padding="6,5"
                                          Margin="0,0,0,8" />
                                 <WrapPanel>
-                                    <Button Content="انتخاب تصویر جایگزین"
+                                    <Button Content="{Binding [Settings.Tab6.SelectFallbackButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                             Click="SelectFallbackButton_Click"
                                             Padding="12,6"
                                             Margin="0,0,8,0" />
-                                    <Button Content="حذف جایگزین"
+                                    <Button Content="{Binding [Settings.Tab6.ClearFallbackButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                             Command="{Binding ClearFallbackImageCommand}"
                                             Padding="12,6" />
                                 </WrapPanel>
@@ -410,27 +418,133 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ۷. اجرای خودکار و رفتار برنامه -->
-            <TabItem Header="۷. اجرای خودکار و System Tray">
+            <!-- 7. Language & Startup -->
+            <TabItem Header="{Binding [Settings.Tab7.Header], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
-                    <StackPanel MaxWidth="560" HorizontalAlignment="Left">
-                        <TextBlock Text="راه‌اندازی خودکار در ویندوز و رفتار پنجره" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
+                    <StackPanel MaxWidth="580" HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding [Settings.Tab7.Title], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontSize="15" FontWeight="Bold" Margin="0,0,0,12" />
 
-                        <CheckBox Content="اجرای خودکار برنامه هنگام ورود به ویندوز (Current User Run)"
+                        <TextBlock Text="{Binding [Settings.Tab7.LanguageLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <ComboBox ItemsSource="{Binding AvailableLanguages}"
+                                  SelectedValue="{Binding SelectedLanguageCode}"
+                                  SelectedValuePath="Code"
+                                  DisplayMemberPath="NativeName"
+                                  MaxWidth="280"
+                                  HorizontalAlignment="Left"
+                                  Padding="8,5"
+                                  Margin="0,0,0,8" />
+
+                        <Border Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,16">
+                            <TextBlock Text="{Binding [Settings.Tab7.LanguageHint], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                       Foreground="#1E3A8A"
+                                       FontSize="12"
+                                       TextWrapping="Wrap" />
+                        </Border>
+
+                        <CheckBox Content="{Binding [Settings.Tab7.StartupCheck], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                   IsChecked="{Binding LaunchOnWindowsStartup}"
                                   Margin="0,0,0,10" />
 
-                        <CheckBox Content="شروع برنامه به‌صورت کوچک‌شده در System Tray"
+                        <CheckBox Content="{Binding [Settings.Tab7.StartMinimizedCheck], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                   IsChecked="{Binding StartMinimizedToTray}"
                                   Margin="0,0,0,10" />
 
-                        <CheckBox Content="هنگام بستن پنجرهٔ اصلی، برنامه در System Tray فعال بماند"
+                        <CheckBox Content="{Binding [Settings.Tab7.MinimizeOnCloseCheck], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                   IsChecked="{Binding MinimizeToTrayOnClose}"
                                   Margin="0,0,0,14" />
 
                         <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="12">
-                            <TextBlock Text="تنظیمات پس از هر تغییر به‌صورت امن و اتمیک در مسیر %LOCALAPPDATA%\JellyfinDesktopSlideshow\settings.json ذخیره می‌شوند و توکن دسترسی تنها در Windows Credential Manager نگهداری می‌شود."
+                            <TextBlock Text="{Binding [Settings.Tab7.StorageInfo], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                        Foreground="#475569"
+                                       FontSize="12"
+                                       TextWrapping="Wrap" />
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- 8. Cleanup & Footprints -->
+            <TabItem Header="{Binding [Settings.Tab8.Header], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16">
+                    <StackPanel MaxWidth="620" HorizontalAlignment="Left" IsEnabled="{Binding CleanupAvailable}">
+                        <TextBlock Text="{Binding [Settings.Tab8.Title], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontSize="15" FontWeight="Bold" Margin="0,0,0,6" />
+                        <TextBlock Text="{Binding [Settings.Tab8.Description], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                   Foreground="#475569"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,12" />
+
+                        <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,14">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding [Settings.Tab8.FootprintHeader], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center" />
+                                    <Button Grid.Column="1"
+                                            Content="{Binding [Settings.Tab8.RefreshFootprintButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                            Command="{Binding RefreshFootprintCommand}"
+                                            Padding="10,4" />
+                                </Grid>
+                                <TextBlock Text="{Binding CleanupCacheSummaryLine}" Foreground="#334155" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,2" />
+                                <TextBlock Text="{Binding CleanupHiddenSummaryLine}" Foreground="#334155" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,2" />
+                                <TextBlock Text="{Binding CleanupOsSummaryLine}" Foreground="#334155" FontSize="12" TextWrapping="Wrap" Margin="0,2,0,2" />
+                                <TextBlock Text="{Binding CleanupRootSummaryLine}" Foreground="#64748B" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="{Binding [Settings.Tab8.OptionsHeader], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,8" />
+
+                        <CheckBox Content="{Binding [Settings.Tab8.OptImageCache], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                  IsChecked="{Binding CleanBackdropCache}"
+                                  Margin="0,0,0,6" />
+                        <CheckBox Content="{Binding [Settings.Tab8.OptLogsAndHidden], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                  IsChecked="{Binding CleanLogsAndHiddenFiles}"
+                                  Margin="0,0,0,6" />
+                        <CheckBox Content="{Binding [Settings.Tab8.OptCredentials], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                  IsChecked="{Binding CleanCredentialsAndSession}"
+                                  Margin="0,0,0,6" />
+                        <CheckBox Content="{Binding [Settings.Tab8.OptOsTraces], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                  IsChecked="{Binding CleanOsTraces}"
+                                  Margin="0,0,0,6" />
+                        <CheckBox Content="{Binding [Settings.Tab8.OptRestoreWallpaper], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                  IsChecked="{Binding RestoreOriginalWallpaperOnCleanup}"
+                                  Margin="20,0,0,6" />
+                        <CheckBox Content="{Binding [Settings.Tab8.OptResetSettings], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                  IsChecked="{Binding CleanResetSettingsFile}"
+                                  Margin="0,0,0,14" />
+
+                        <WrapPanel Margin="0,0,0,12">
+                            <Button Content="{Binding [Settings.Tab8.QuickCacheButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                    Command="{Binding QuickClearImageCacheCommand}"
+                                    Padding="12,6"
+                                    Margin="0,0,8,6" />
+                            <Button Content="{Binding [Settings.Tab8.QuickHiddenButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                    Command="{Binding QuickClearLogsAndHiddenCommand}"
+                                    Padding="12,6"
+                                    Margin="0,0,8,6" />
+                            <Button Content="{Binding [Settings.Tab8.CleanSelectedButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                    Click="CleanSelectedButton_Click"
+                                    Padding="14,6"
+                                    FontWeight="SemiBold"
+                                    Margin="0,0,8,6" />
+                            <Button Content="{Binding [Settings.Tab8.FullWipeButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                    Click="FullWipeButton_Click"
+                                    Background="#B91C1C"
+                                    Foreground="#FFFFFF"
+                                    BorderBrush="#991B1B"
+                                    Padding="14,6"
+                                    FontWeight="SemiBold"
+                                    Margin="0,0,0,6" />
+                        </WrapPanel>
+
+                        <Border Background="#FEF2F2" BorderBrush="#FECACA" BorderThickness="1" CornerRadius="6" Padding="10">
+                            <TextBlock Text="{Binding [Settings.Tab8.FullWipeWarning], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                       Foreground="#991B1B"
                                        FontSize="12"
                                        TextWrapping="Wrap" />
                         </Border>
@@ -455,7 +569,7 @@
                     <ProgressBar Width="80" Height="12" IsIndeterminate="True"
                                  Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"
                                  Margin="0,0,10,0" />
-                    <Button Content="بستن"
+                    <Button Content="{Binding [Settings.CloseButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                             Click="CloseButton_Click"
                             Padding="18,6"
                             FontWeight="SemiBold" />

@@ -1,4 +1,5 @@
 using System.Windows;
+using JellyfinDesktopSlideshow.Localization;
 using JellyfinDesktopSlideshow.ViewModels;
 
 namespace JellyfinDesktopSlideshow.Views;
@@ -57,16 +58,70 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        var loc = AppLocalization.Current;
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "انتخاب تصویر جایگزین",
-            Filter = "تصاویر پشتیبانی‌شده|*.jpg;*.jpeg;*.png;*.webp;*.bmp"
+            Title = loc.GetString("Settings.Tab6.SelectFallbackDialogTitle"),
+            Filter = loc.GetString("Settings.Tab6.SelectFallbackDialogFilter")
         };
 
         if (dialog.ShowDialog(this) == true)
         {
             vm.SetFallbackImagePath(dialog.FileName);
         }
+    }
+
+    private async void CleanSelectedButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsViewModel vm || vm.IsBusy)
+        {
+            return;
+        }
+
+        if (vm.CleanResetSettingsFile)
+        {
+            var loc = AppLocalization.Current;
+            var confirm = MessageBox.Show(
+                this,
+                loc.GetString("Settings.Tab8.ConfirmSelectedResetMessage"),
+                loc.GetString("App.Title"),
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No,
+                AppLocalization.GetMessageBoxOptions());
+
+            if (confirm != MessageBoxResult.Yes)
+            {
+                return;
+            }
+        }
+
+        await vm.ExecuteSelectedCleanupAsync();
+    }
+
+    private async void FullWipeButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsViewModel vm || vm.IsBusy)
+        {
+            return;
+        }
+
+        var loc = AppLocalization.Current;
+        var confirm = MessageBox.Show(
+            this,
+            loc.GetString("Settings.Tab8.ConfirmFullWipeMessage"),
+            loc.GetString("App.Title"),
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning,
+            MessageBoxResult.No,
+            AppLocalization.GetMessageBoxOptions());
+
+        if (confirm != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        await vm.ExecuteFullWipeAsync();
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)

@@ -1,5 +1,6 @@
 using System.Windows;
 using JellyfinDesktopSlideshow.Infrastructure;
+using JellyfinDesktopSlideshow.Localization;
 
 namespace JellyfinDesktopSlideshow.Services;
 
@@ -17,14 +18,19 @@ internal static class LaunchResultDialogHelper
         }
 
         logger?.Warning($"باز کردن عنوان از {sourceLabel} ناموفق بود: {result.Message}");
+        var loc = AppLocalization.Current;
+        var title = loc.GetString("App.Title");
+        var options = AppLocalization.GetMessageBoxOptions();
 
         if (result.CanFallbackToBrowser && !string.IsNullOrWhiteSpace(result.FallbackBrowserUrl))
         {
             var answer = MessageBox.Show(
-                $"{result.Message}\n\nآیا می‌خواهید این عنوان در مرورگر پیش‌فرض باز شود؟",
-                "Jellyfin Desktop Slideshow",
+                loc.Format("Launch.Dialog.FallbackBrowserPromptFormat", result.Message),
+                title,
                 MessageBoxButton.YesNo,
-                MessageBoxImage.Information);
+                MessageBoxImage.Information,
+                MessageBoxResult.No,
+                options);
 
             if (answer == MessageBoxResult.Yes)
             {
@@ -35,9 +41,11 @@ internal static class LaunchResultDialogHelper
         {
             MessageBox.Show(
                 result.Message,
-                "Jellyfin Desktop Slideshow",
+                title,
                 MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+                MessageBoxImage.Warning,
+                MessageBoxResult.OK,
+                options);
         }
     }
 }

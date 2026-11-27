@@ -10,10 +10,7 @@ public sealed partial class LoggingService : ILoggingService
 
     public LoggingService(string? logDirectory = null)
     {
-        _logDirectory = logDirectory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "JellyfinDesktopSlideshow",
-            "logs");
+        _logDirectory = logDirectory ?? AppDataPaths.Default.LogsDirectory;
     }
 
     public void Info(string message) => Write("INFO", message, null);

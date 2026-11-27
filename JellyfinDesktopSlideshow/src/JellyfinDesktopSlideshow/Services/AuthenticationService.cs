@@ -1,4 +1,5 @@
 using JellyfinDesktopSlideshow.Infrastructure;
+using JellyfinDesktopSlideshow.Localization;
 using JellyfinDesktopSlideshow.Models;
 
 namespace JellyfinDesktopSlideshow.Services;
@@ -9,6 +10,7 @@ public sealed class AuthenticationService : IAuthenticationService
     private readonly ISettingsService _settingsService;
     private readonly ISecureStorageService _secureStorage;
     private readonly ILoggingService _logger;
+    private readonly ILocalizationService _localization;
 
     public ConnectionSessionState CurrentSession { get; private set; } = new();
 
@@ -16,19 +18,23 @@ public sealed class AuthenticationService : IAuthenticationService
         IJellyfinClient client,
         ISettingsService settingsService,
         ISecureStorageService secureStorage,
-        ILoggingService logger)
+        ILoggingService logger,
+        ILocalizationService? localization = null)
     {
         _client = client;
         _settingsService = settingsService;
         _secureStorage = secureStorage;
         _logger = logger;
+        _localization = localization ?? AppLocalization.Current;
     }
 
     public async Task<ServerPublicInfo> TestConnectionAsync(string serverUrl, CancellationToken cancellationToken = default)
     {
         if (!_settingsService.TryValidateServerUrl(serverUrl, out var serverUri, out var validationError) || serverUri is null)
         {
-            throw new JellyfinApiException(JellyfinErrorKind.BadRequestOrVersionMismatch, validationError ?? "آدرس سرور نامعتبر است.");
+            throw new JellyfinApiException(
+                JellyfinErrorKind.BadRequestOrVersionMismatch,
+                validationError ?? _localization.GetString("Auth.Error.InvalidServerUrl"));
         }
 
         var info = await _client.GetPublicServerInfoAsync(serverUri, cancellationToken);
@@ -50,18 +56,20 @@ public sealed class AuthenticationService : IAuthenticationService
     {
         if (!_settingsService.TryValidateServerUrl(serverUrl, out var serverUri, out var validationError) || serverUri is null)
         {
-            throw new JellyfinApiException(JellyfinErrorKind.BadRequestOrVersionMismatch, validationError ?? "آدرس سرور نامعتبر است.");
+            throw new JellyfinApiException(
+                JellyfinErrorKind.BadRequestOrVersionMismatch,
+                validationError ?? _localization.GetString("Auth.Error.InvalidServerUrl"));
         }
 
         var trimmedKey = (apiKey ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(trimmedKey))
         {
-            throw new JellyfinApiException(JellyfinErrorKind.Unauthorized, "کلید API را وارد کنید.");
+            throw new JellyfinApiException(JellyfinErrorKind.Unauthorized, _localization.GetString("Auth.Error.EnterApiKey"));
         }
 
         if (trimmedKey.Any(c => char.IsWhiteSpace(c) || char.IsControl(c)))
         {
-            throw new JellyfinApiException(JellyfinErrorKind.Unauthorized, "فرمت کلید API معتبر نیست (نباید شامل فاصله یا سطر جدید باشد).");
+            throw new JellyfinApiException(JellyfinErrorKind.Unauthorized, _localization.GetString("Auth.Error.InvalidApiKeyFormat"));
         }
 
         var publicInfo = await _client.GetPublicServerInfoAsync(serverUri, cancellationToken);
@@ -71,7 +79,7 @@ public sealed class AuthenticationService : IAuthenticationService
         {
             throw new JellyfinApiException(
                 JellyfinErrorKind.Unauthorized,
-                "کلید API واردشده معتبر نیست یا در سرور Jellyfin لغو شده است.");
+                _localization.GetString("Auth.Error.InvalidOrRevokedApiKey"));
         }
 
         _secureStorage.SaveSecret(settings.TokenCredentialKey, "ApiKey", trimmedKey);
@@ -91,7 +99,7 @@ public sealed class AuthenticationService : IAuthenticationService
             ServerVersion = publicInfo.Version,
             ServerId = publicInfo.ServerId,
             UserId = null,
-            Username = "کلید API",
+            Username = _localization.GetString("Auth.ApiKeySessionName"),
             AccessToken = trimmedKey,
             IsApiKeySession = true,
             IsNonLocalPlainHttp = _settingsService.IsNonLocalPlainHttp(serverUri)
@@ -109,12 +117,14 @@ public sealed class AuthenticationService : IAuthenticationService
     {
         if (!_settingsService.TryValidateServerUrl(serverUrl, out var serverUri, out var validationError) || serverUri is null)
         {
-            throw new JellyfinApiException(JellyfinErrorKind.BadRequestOrVersionMismatch, validationError ?? "آدرس سرور نامعتبر است.");
+            throw new JellyfinApiException(
+                JellyfinErrorKind.BadRequestOrVersionMismatch,
+                validationError ?? _localization.GetString("Auth.Error.InvalidServerUrl"));
         }
 
         if (string.IsNullOrWhiteSpace(username))
         {
-            throw new JellyfinApiException(JellyfinErrorKind.Unauthorized, "نام کاربری را وارد کنید.");
+            throw new JellyfinApiException(JellyfinErrorKind.Unauthorized, _localization.GetString("Auth.Error.EnterUsername"));
         }
 
         var publicInfo = await _client.GetPublicServerInfoAsync(serverUri, cancellationToken);
@@ -194,8 +204,8 @@ public sealed class AuthenticationService : IAuthenticationService
                     ServerName = publicInfo.ServerName,
                     ServerVersion = publicInfo.Version,
                     WarningOrError = isApiKeySession
-                        ? "کلید API ذخیره‌شده نامعتبر یا لغو شده است. لطفاً کلید جدید وارد کنید."
-                        : "توکن ذخیره‌شده منقضی شده است. لطفاً دوباره وارد شوید."
+                        ? _localization.GetString("Auth.Error.StoredApiKeyInvalid")
+                        : _localization.GetString("Auth.Error.StoredTokenExpired")
                 };
                 return CurrentSession;
             }
@@ -208,7 +218,7 @@ public sealed class AuthenticationService : IAuthenticationService
                 ServerVersion = publicInfo.Version,
                 ServerId = string.IsNullOrWhiteSpace(settings.ServerId) ? publicInfo.ServerId : settings.ServerId,
                 UserId = isApiKeySession ? null : settings.UserId,
-                Username = isApiKeySession ? "کلید API" : settings.Username,
+                Username = isApiKeySession ? _localization.GetString("Auth.ApiKeySessionName") : settings.Username,
                 AccessToken = token,
                 IsApiKeySession = isApiKeySession,
                 IsNonLocalPlainHttp = _settingsService.IsNonLocalPlainHttp(serverUri)

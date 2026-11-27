@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using JellyfinDesktopSlideshow.Infrastructure;
+using JellyfinDesktopSlideshow.Localization;
 using JellyfinDesktopSlideshow.Models;
 using JellyfinDesktopSlideshow.Services;
 
@@ -19,24 +20,26 @@ public sealed class MainViewModel : ViewModelBase
     private readonly ILoggingService _logger;
     private readonly IDesktopShortcutService? _desktopShortcutService;
     private readonly ICurrentItemLaunchCoordinator? _launchCoordinator;
+    private readonly ILocalizationService _localization;
 
     private CancellationTokenSource? _previewCts;
     private bool _initialized;
     private string _serverUrl = string.Empty;
     private string _username = string.Empty;
     private JellyfinAuthMethod _selectedAuthMethod = JellyfinAuthMethod.ApiKey;
-    private string _connectionStatus = "متصل نیست";
+    private string _selectedLanguageCode;
+    private string _connectionStatus = string.Empty;
     private string _serverDetails = string.Empty;
     private string _securityWarning = string.Empty;
     private string _errorMessage = string.Empty;
-    private string _itemsSummary = "عنوانی بارگذاری نشده است.";
-    private string _previewTitle = "عنوانی انتخاب نشده است";
-    private string _previewStatus = "یک عنوان را انتخاب کنید یا اسلایدشو را شروع کنید.";
+    private string _itemsSummary = string.Empty;
+    private string _previewTitle = string.Empty;
+    private string _previewStatus = string.Empty;
     private string _currentSlideItemId = "-";
     private string? _previewImagePath;
     private string? _lastAppliedSlidePath;
     private string _cacheSummary = string.Empty;
-    private string _wallpaperStatus = "والپیپر هنوز تغییر نکرده است.";
+    private string _wallpaperStatus = string.Empty;
     private string _monitorsSummary = string.Empty;
     private bool _isSlideshowRunning;
     private bool _isSlideshowPaused;
@@ -47,14 +50,14 @@ public sealed class MainViewModel : ViewModelBase
     private MediaItem? _selectedMediaItem;
     private bool _isBusy;
     private bool _isAuthenticated;
+    private ServerPublicInfo? _lastTestedServerInfo;
+    private bool _hasAttemptedMediaLoad;
 
     public ObservableCollection<MediaItem> MediaItems { get; } = [];
 
-    public IReadOnlyList<KeyValuePair<JellyfinAuthMethod, string>> AuthMethodOptions { get; } =
-    [
-        new(JellyfinAuthMethod.ApiKey, "کلید API (اصلی)"),
-        new(JellyfinAuthMethod.UsernamePassword, "نام کاربری و رمز")
-    ];
+    public IReadOnlyList<LanguageDefinition> AvailableLanguages => _localization.AvailableLanguages;
+
+    public IReadOnlyList<KeyValuePair<JellyfinAuthMethod, string>> AuthMethodOptions => BuildAuthMethodOptions();
 
     public AsyncRelayCommand TestConnectionCommand { get; }
     public AsyncRelayCommand RefreshMediaCommand { get; }
@@ -75,6 +78,7 @@ public sealed class MainViewModel : ViewModelBase
     public event EventHandler? MinimizeToTrayRequested;
     public event EventHandler? ExitApplicationRequested;
     public event EventHandler? DesktopShortcutSynchronized;
+    public event EventHandler? LanguageSynchronized;
 
     public MainViewModel(
         IAuthenticationService authService,
@@ -88,7 +92,8 @@ public sealed class MainViewModel : ViewModelBase
         ISettingsService settingsService,
         ILoggingService logger,
         IDesktopShortcutService? desktopShortcutService = null,
-        ICurrentItemLaunchCoordinator? launchCoordinator = null)
+        ICurrentItemLaunchCoordinator? launchCoordinator = null,
+        ILocalizationService? localization = null)
     {
         _authService = authService;
         _libraryService = libraryService;
@@ -102,6 +107,7 @@ public sealed class MainViewModel : ViewModelBase
         _logger = logger;
         _desktopShortcutService = desktopShortcutService;
         _launchCoordinator = launchCoordinator;
+        _localization = localization ?? AppLocalization.Current;
 
         var settings = _settingsService.Load();
         _serverUrl = settings.ServerUrl;
@@ -109,6 +115,17 @@ public sealed class MainViewModel : ViewModelBase
         _selectedAuthMethod = string.Equals(settings.AuthMethod, AppSettings.PasswordAuthMethod, StringComparison.OrdinalIgnoreCase)
             ? JellyfinAuthMethod.UsernamePassword
             : JellyfinAuthMethod.ApiKey;
+        _selectedLanguageCode = _localization.NormalizeLanguageCode(settings.Language);
+        if (!string.Equals(_localization.CurrentLanguage.Code, _selectedLanguageCode, StringComparison.OrdinalIgnoreCase))
+        {
+            _localization.SetLanguage(_selectedLanguageCode);
+        }
+
+        _connectionStatus = _localization.GetString("Status.Disconnected");
+        _itemsSummary = _localization.GetString("Main.ItemsSummary.NotLoaded");
+        _previewTitle = _localization.GetString("Main.Preview.DefaultTitle");
+        _previewStatus = _localization.GetString("Main.Preview.DefaultStatus");
+        _wallpaperStatus = _localization.GetString("Main.WallpaperStatus.Initial");
 
         TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync, () => !IsBusy);
         RefreshMediaCommand = new AsyncRelayCommand(RefreshMediaAsync, () => !IsBusy && IsAuthenticated);
@@ -140,8 +157,28 @@ public sealed class MainViewModel : ViewModelBase
         });
 
         _slideshowService.StateChanged += OnSlideshowStateChanged;
+        _localization.LanguageChanged += OnLanguageChanged;
         RefreshCacheSummary();
         RefreshDisplayConfiguration();
+    }
+
+    public string SelectedLanguageCode
+    {
+        get => _selectedLanguageCode;
+        set
+        {
+            var normalized = _localization.NormalizeLanguageCode(value);
+            if (!string.Equals(_selectedLanguageCode, normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                _selectedLanguageCode = normalized;
+                var settings = _settingsService.Current;
+                settings.Language = normalized;
+                _settingsService.Save(settings);
+                _localization.SetLanguage(normalized);
+                OnPropertyChanged();
+                LanguageSynchronized?.Invoke(this, EventArgs.Empty);
+            }
+        }
     }
 
     public string ServerUrl
@@ -332,7 +369,9 @@ public sealed class MainViewModel : ViewModelBase
         }
     }
 
-    public string PauseResumeButtonText => IsSlideshowPaused ? "ادامه" : "مکث";
+    public string PauseResumeButtonText => IsSlideshowPaused
+        ? _localization.GetString("Main.Controls.Resume")
+        : _localization.GetString("Main.Controls.Pause");
 
     public bool IsOverlayVisible
     {
@@ -346,7 +385,9 @@ public sealed class MainViewModel : ViewModelBase
         }
     }
 
-    public string OverlayToggleButtonText => IsOverlayVisible ? "مخفی کردن آیکون" : "نمایش آیکون";
+    public string OverlayToggleButtonText => IsOverlayVisible
+        ? _localization.GetString("Main.Controls.HideOverlay")
+        : _localization.GetString("Main.Controls.ShowOverlay");
 
     public string LaunchStatus
     {
@@ -402,7 +443,7 @@ public sealed class MainViewModel : ViewModelBase
         catch (Exception ex)
         {
             _logger.Error("خطا هنگام راه‌اندازی اولیه.", ex);
-            ErrorMessage = "بازیابی نشست با خطا مواجه شد. می‌توانید از بخش اتصال یا تنظیمات وارد شوید.";
+            ErrorMessage = _localization.GetString("Auth.Error.UnexpectedRestore");
         }
         finally
         {
@@ -430,13 +471,13 @@ public sealed class MainViewModel : ViewModelBase
         catch (JellyfinApiException ex)
         {
             ErrorMessage = ex.Message;
-            ConnectionStatus = "خطا در اتصال";
+            ConnectionStatus = _localization.GetString("Status.ConnectionError");
             return false;
         }
         catch (Exception ex)
         {
             _logger.Error("خطای غیرمنتظره هنگام اتصال با کلید API.", ex);
-            ErrorMessage = "خطای غیرمنتظره هنگام اتصال با کلید API رخ داد.";
+            ErrorMessage = _localization.GetString("Auth.Error.UnexpectedApiKeyLogin");
             return false;
         }
         finally
@@ -465,13 +506,13 @@ public sealed class MainViewModel : ViewModelBase
         catch (JellyfinApiException ex)
         {
             ErrorMessage = ex.Message;
-            ConnectionStatus = "خطا در ورود";
+            ConnectionStatus = _localization.GetString("Status.LoginError");
             return false;
         }
         catch (Exception ex)
         {
             _logger.Error("خطای غیرمنتظره هنگام ورود.", ex);
-            ErrorMessage = "خطای غیرمنتظره هنگام ورود رخ داد.";
+            ErrorMessage = _localization.GetString("Auth.Error.UnexpectedLogin");
             return false;
         }
         finally
@@ -491,6 +532,14 @@ public sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedAuthMethod));
         OnPropertyChanged(nameof(IsApiKeyAuthSelected));
         OnPropertyChanged(nameof(IsPasswordAuthSelected));
+
+        var currentLangCode = _localization.CurrentLanguage.Code;
+        if (!string.Equals(_selectedLanguageCode, currentLangCode, StringComparison.OrdinalIgnoreCase))
+        {
+            _selectedLanguageCode = currentLangCode;
+            OnPropertyChanged(nameof(SelectedLanguageCode));
+        }
+
         ApplySessionState(_authService.CurrentSession);
         IsOverlayVisible = _overlayService.IsVisible;
         RefreshCacheSummary();
@@ -498,20 +547,21 @@ public sealed class MainViewModel : ViewModelBase
         if (!settings.ApplyToDesktopWallpaper)
         {
             _lastAppliedSlidePath = null;
-            WallpaperStatus = "اعمال خودکار والپیپر غیرفعال است.";
+            WallpaperStatus = _localization.GetString("Main.WallpaperStatus.AutoDisabled");
         }
 
         if (!IsAuthenticated)
         {
             CancelPendingPreview();
             MediaItems.Clear();
+            _hasAttemptedMediaLoad = false;
             SelectedMediaItem = null;
             PreviewImagePath = null;
             _lastAppliedSlidePath = null;
             CurrentSlideItemId = "-";
-            PreviewTitle = "عنوانی انتخاب نشده است";
-            PreviewStatus = "برای شروع اسلایدشو، وارد حساب Jellyfin شوید.";
-            ItemsSummary = "اتصال به سرور برقرار نیست.";
+            PreviewTitle = _localization.GetString("Main.Preview.DefaultTitle");
+            PreviewStatus = _localization.GetString("Main.Preview.SignInRequired");
+            ItemsSummary = _localization.GetString("Main.ItemsSummary.Disconnected");
             RefreshCommands();
             return;
         }
@@ -547,6 +597,71 @@ public sealed class MainViewModel : ViewModelBase
 
     public Task OpenCurrentItemFromExternalAsync() => OpenCurrentItemAsync();
 
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        var currentLangCode = _localization.CurrentLanguage.Code;
+        if (!string.Equals(_selectedLanguageCode, currentLangCode, StringComparison.OrdinalIgnoreCase))
+        {
+            _selectedLanguageCode = currentLangCode;
+            OnPropertyChanged(nameof(SelectedLanguageCode));
+        }
+
+        OnPropertyChanged(nameof(AvailableLanguages));
+        OnPropertyChanged(nameof(AuthMethodOptions));
+        OnPropertyChanged(nameof(PauseResumeButtonText));
+        OnPropertyChanged(nameof(OverlayToggleButtonText));
+
+        if (_authService.CurrentSession.IsAuthenticated)
+        {
+            ApplySessionState(_authService.CurrentSession);
+        }
+        else if (_lastTestedServerInfo is not null)
+        {
+            ConnectionStatus = _localization.GetString("Status.ServerReachable");
+            ServerDetails = BidiTextFormatter.FormatServerDetails(
+                _lastTestedServerInfo.ServerName,
+                _lastTestedServerInfo.Version,
+                _localization.GetString("Settings.VersionLabel"));
+            SecurityWarning = _lastTestedServerInfo.IsNonLocalPlainHttp
+                ? _localization.GetString("Status.SecurityNonLocalHttpWarning")
+                : string.Empty;
+        }
+        else
+        {
+            ConnectionStatus = _localization.GetString("Status.Disconnected");
+            ServerDetails = string.Empty;
+            SecurityWarning = string.Empty;
+        }
+
+        RefreshCacheSummary();
+        MonitorsSummary = _wallpaperService.GetMonitorsSummary();
+        RefreshItemsSummaryText();
+
+        if (SelectedMediaItem is null && _slideshowService.CurrentState.CurrentItem is null)
+        {
+            PreviewTitle = _localization.GetString("Main.Preview.DefaultTitle");
+            PreviewStatus = IsAuthenticated
+                ? _localization.GetString("Main.Preview.DefaultStatus")
+                : _localization.GetString("Main.Preview.SignInRequired");
+        }
+
+        if (!_settingsService.Current.ApplyToDesktopWallpaper)
+        {
+            WallpaperStatus = _localization.GetString("Main.WallpaperStatus.AutoDisabled");
+        }
+        else if (string.IsNullOrWhiteSpace(_wallpaperService.LastAppliedWallpaperPath))
+        {
+            WallpaperStatus = _localization.GetString("Main.WallpaperStatus.Initial");
+        }
+    }
+
+    private IReadOnlyList<KeyValuePair<JellyfinAuthMethod, string>> BuildAuthMethodOptions()
+        =>
+        [
+            new(JellyfinAuthMethod.ApiKey, _localization.GetString("AuthMethod.ApiKey")),
+            new(JellyfinAuthMethod.UsernamePassword, _localization.GetString("AuthMethod.UsernamePassword"))
+        ];
+
     private async Task TestConnectionAsync()
     {
         IsBusy = true;
@@ -556,24 +671,29 @@ public sealed class MainViewModel : ViewModelBase
         try
         {
             var info = await _authService.TestConnectionAsync(ServerUrl);
-            ConnectionStatus = "سرور در دسترس است";
-            ServerDetails = $"{info.ServerName} — نسخه {info.Version}";
+            _lastTestedServerInfo = info;
+            ConnectionStatus = _localization.GetString("Status.ServerReachable");
+            ServerDetails = BidiTextFormatter.FormatServerDetails(
+                info.ServerName,
+                info.Version,
+                _localization.GetString("Settings.VersionLabel"));
 
             if (info.IsNonLocalPlainHttp)
             {
-                SecurityWarning = "هشدار امنیتی: اتصال HTTP غیررمزگذاری‌شده خارج از شبکهٔ محلی ناامن است؛ استفاده از HTTPS توصیه می‌شود.";
+                SecurityWarning = _localization.GetString("Status.SecurityNonLocalHttpWarning");
             }
         }
         catch (JellyfinApiException ex)
         {
-            ConnectionStatus = "ارتباط برقرار نشد";
+            _lastTestedServerInfo = null;
+            ConnectionStatus = _localization.GetString("Status.ServerUnreachable");
             ServerDetails = string.Empty;
             ErrorMessage = ex.Message;
         }
         catch (Exception ex)
         {
             _logger.Error("خطای غیرمنتظره هنگام تست اتصال.", ex);
-            ErrorMessage = "خطای غیرمنتظره هنگام تست اتصال رخ داد.";
+            ErrorMessage = _localization.GetString("Auth.Error.UnexpectedConnection");
         }
         finally
         {
@@ -621,13 +741,30 @@ public sealed class MainViewModel : ViewModelBase
             MediaItems.Add(item);
         }
 
+        _hasAttemptedMediaLoad = true;
         _slideshowService.SetItems(items);
         RefreshCommands();
+        RefreshItemsSummaryText();
+    }
 
-        var withBackdrop = items.Count(i => i.HasBackdrop);
-        ItemsSummary = items.Count == 0
-            ? "هیچ عنوانی در کتابخانه‌های انتخاب‌شده یافت نشد."
-            : $"تعداد کل عنوان‌ها: {items.Count} (دارای تصویر Backdrop: {withBackdrop})";
+    private void RefreshItemsSummaryText()
+    {
+        if (!IsAuthenticated && !_hasAttemptedMediaLoad)
+        {
+            ItemsSummary = _localization.GetString("Main.ItemsSummary.Disconnected");
+            return;
+        }
+
+        if (!_hasAttemptedMediaLoad)
+        {
+            ItemsSummary = _localization.GetString("Main.ItemsSummary.NotLoaded");
+            return;
+        }
+
+        var withBackdrop = MediaItems.Count(i => i.HasBackdrop);
+        ItemsSummary = MediaItems.Count == 0
+            ? _localization.GetString("Media.NoneFound")
+            : _localization.Format("Media.SummaryFormat", MediaItems.Count, withBackdrop);
     }
 
     private async Task LoadSelectedBackdropAsync()
@@ -642,10 +779,8 @@ public sealed class MainViewModel : ViewModelBase
         var cts = new CancellationTokenSource();
         _previewCts = cts;
 
-        PreviewTitle = item.ProductionYear.HasValue
-            ? $"{item.Name} ({item.ProductionYear})"
-            : item.Name;
-        PreviewStatus = "در حال دریافت تصویر Backdrop...";
+        PreviewTitle = BidiTextFormatter.FormatTitle(item.Name, item.ProductionYear);
+        PreviewStatus = _localization.GetString("Main.Preview.Loading");
 
         try
         {
@@ -668,7 +803,7 @@ public sealed class MainViewModel : ViewModelBase
         {
             _logger.Error($"خطا در بارگذاری پیش‌نمایش تصویر {item.Name}.", ex);
             PreviewImagePath = null;
-            PreviewStatus = "بارگذاری تصویر با خطا مواجه شد.";
+            PreviewStatus = _localization.GetString("Main.Preview.LoadError");
         }
     }
 
@@ -677,12 +812,12 @@ public sealed class MainViewModel : ViewModelBase
         var item = ResolveCurrentActionItem();
         if (item is null)
         {
-            LaunchStatus = CurrentItemLaunchCoordinator.MissingItemErrorMessage;
+            LaunchStatus = _localization.GetString("Launch.Error.MissingItem");
             return;
         }
 
         PendingFallbackBrowserUrl = null;
-        LaunchStatus = $"در حال باز کردن «{item.Name}»...";
+        LaunchStatus = _localization.Format("Launch.Status.OpeningFormat", BidiTextFormatter.Isolate(item.Name));
 
         var result = _launchCoordinator is not null
             ? await _launchCoordinator.LaunchCurrentItemAsync(item)
@@ -730,8 +865,8 @@ public sealed class MainViewModel : ViewModelBase
 
         var opened = _itemLauncher.OpenValidatedBrowserUrl(PendingFallbackBrowserUrl);
         LaunchStatus = opened
-            ? "عنوان در مرورگر پیش‌فرض باز شد."
-            : "باز کردن مرورگر پیش‌فرض ناموفق بود.";
+            ? _localization.GetString("Launch.Status.FallbackBrowserOpened")
+            : _localization.GetString("Launch.Error.BrowserFailed");
 
         if (opened)
         {
@@ -770,9 +905,7 @@ public sealed class MainViewModel : ViewModelBase
 
         if (state.CurrentItem is not null)
         {
-            PreviewTitle = state.CurrentItem.ProductionYear.HasValue
-                ? $"{state.CurrentItem.Name} ({state.CurrentItem.ProductionYear})"
-                : state.CurrentItem.Name;
+            PreviewTitle = BidiTextFormatter.FormatTitle(state.CurrentItem.Name, state.CurrentItem.ProductionYear);
             CurrentSlideItemId = state.CurrentItem.Id;
         }
         else if (!state.IsRunning)
@@ -827,7 +960,7 @@ public sealed class MainViewModel : ViewModelBase
         var result = await _wallpaperService.ReapplyCurrentWallpaperAsync();
         if (result.Succeeded)
         {
-            WallpaperStatus = $"{result.Message} (تطبیق با تغییر نمایشگر)";
+            WallpaperStatus = _localization.Format("Wallpaper.Status.DisplayReappliedFormat", result.Message);
         }
     }
 
@@ -851,20 +984,23 @@ public sealed class MainViewModel : ViewModelBase
     {
         var stats = _cacheService.GetStats();
         var sizeMb = stats.TotalBytes / (1024.0 * 1024.0);
-        CacheSummary = $"کش محلی: {stats.FileCount} تصویر ({sizeMb:F2} مگابایت)";
+        CacheSummary = _localization.Format("Main.CacheSummaryFormat", stats.FileCount, sizeMb);
     }
 
     private void ApplySessionState(ConnectionSessionState session)
     {
         IsAuthenticated = session.IsAuthenticated;
         ConnectionStatus = session.IsAuthenticated
-            ? (session.IsApiKeySession ? "متصل (کلید API)" : $"متصل ({session.Username})")
-            : "متصل نیست";
-        ServerDetails = string.IsNullOrWhiteSpace(session.ServerName)
-            ? string.Empty
-            : $"{session.ServerName} — نسخه {session.ServerVersion}";
+            ? (session.IsApiKeySession
+                ? _localization.GetString("Status.ConnectedApiKey")
+                : _localization.Format("Status.ConnectedUserFormat", BidiTextFormatter.Isolate(session.Username)))
+            : _localization.GetString("Status.Disconnected");
+        ServerDetails = BidiTextFormatter.FormatServerDetails(
+            session.ServerName,
+            session.ServerVersion,
+            _localization.GetString("Settings.VersionLabel"));
         SecurityWarning = session.IsNonLocalPlainHttp
-            ? "هشدار امنیتی: اتصال HTTP غیررمزگذاری‌شده خارج از شبکهٔ محلی ناامن است؛ استفاده از HTTPS توصیه می‌شود."
+            ? _localization.GetString("Status.SecurityNonLocalHttpWarning")
             : string.Empty;
     }
 
@@ -874,7 +1010,7 @@ public sealed class MainViewModel : ViewModelBase
         if (ex.ErrorKind == JellyfinErrorKind.Unauthorized)
         {
             IsAuthenticated = false;
-            ConnectionStatus = "نشست منقضی شده";
+            ConnectionStatus = _localization.GetString("Status.SessionExpired");
         }
     }
 

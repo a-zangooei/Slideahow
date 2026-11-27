@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using JellyfinDesktopSlideshow.Infrastructure;
+using JellyfinDesktopSlideshow.Localization;
 
 namespace JellyfinDesktopSlideshow.Services;
 
@@ -26,6 +27,7 @@ public sealed class WallpaperService : IWallpaperService
     private readonly IWallpaperPlatformAdapter _platformAdapter;
     private readonly ISettingsService _settingsService;
     private readonly ILoggingService _logger;
+    private readonly ILocalizationService _localization;
     private readonly string _stagingDirectory;
     private readonly string _managedCacheDirectory;
     private readonly string _stateFilePath;
@@ -57,23 +59,23 @@ public sealed class WallpaperService : IWallpaperService
         ILoggingService logger,
         string? stagingDirectory = null,
         string? stateFilePath = null,
-        string? managedCacheDirectory = null)
+        string? managedCacheDirectory = null,
+        AppDataPaths? paths = null,
+        ILocalizationService? localization = null)
     {
         _platformAdapter = platformAdapter;
         _settingsService = settingsService;
         _logger = logger;
+        _localization = localization ?? AppLocalization.Current;
 
-        var appDataRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "JellyfinDesktopSlideshow");
-
-        _stagingDirectory = stagingDirectory ?? Path.Combine(appDataRoot, "cache", "wallpaper");
-        _managedCacheDirectory = managedCacheDirectory ?? Path.Combine(appDataRoot, "cache", "backdrops");
-        _stateFilePath = stateFilePath ?? Path.Combine(appDataRoot, "wallpaper-state.json");
+        var resolvedPaths = paths ?? AppDataPaths.Default;
+        _stagingDirectory = stagingDirectory ?? resolvedPaths.WallpaperStagingDirectory;
+        _managedCacheDirectory = managedCacheDirectory ?? resolvedPaths.BackdropCacheDirectory;
+        _stateFilePath = stateFilePath ?? resolvedPaths.WallpaperStateFilePath;
 
         var stateParent = Path.GetDirectoryName(_stateFilePath);
         _backupDirectory = string.IsNullOrWhiteSpace(stateParent)
-            ? Path.Combine(appDataRoot, "backup")
+            ? resolvedPaths.BackupDirectory
             : Path.Combine(stateParent, "backup");
     }
 
@@ -81,7 +83,7 @@ public sealed class WallpaperService : IWallpaperService
     {
         if (string.IsNullOrWhiteSpace(imagePath) || !ImageFormatValidator.IsValidImageFile(imagePath))
         {
-            return new WallpaperApplyResult(false, "فایل تصویر برای تنظیم والپیپر معتبر نیست یا وجود ندارد.");
+            return new WallpaperApplyResult(false, _localization.GetString("Wallpaper.Error.InvalidImage"));
         }
 
         await _applyGate.WaitAsync(cancellationToken);
@@ -150,12 +152,12 @@ public sealed class WallpaperService : IWallpaperService
         }
         catch (OperationCanceledException)
         {
-            return new WallpaperApplyResult(false, "تغییر والپیپر لغو شد.");
+            return new WallpaperApplyResult(false, _localization.GetString("Wallpaper.Error.Cancelled"));
         }
         catch (Exception ex)
         {
             _logger.Error("خطای غیرمنتظره در WallpaperService.", ex);
-            return new WallpaperApplyResult(false, $"تنظیم والپیپر با خطا مواجه شد: {ex.Message}");
+            return new WallpaperApplyResult(false, _localization.Format("Wallpaper.Error.UnexpectedFormat", ex.Message));
         }
         finally
         {
@@ -167,7 +169,7 @@ public sealed class WallpaperService : IWallpaperService
     {
         if (string.IsNullOrWhiteSpace(LastAppliedWallpaperPath))
         {
-            return Task.FromResult(new WallpaperApplyResult(false, "هنوز والپیپری تنظیم نشده است."));
+            return Task.FromResult(new WallpaperApplyResult(false, _localization.GetString("Wallpaper.Error.NotAppliedYet")));
         }
 
         return ApplyWallpaperAsync(LastAppliedWallpaperPath, cancellationToken);
@@ -183,7 +185,7 @@ public sealed class WallpaperService : IWallpaperService
             if (!snapshot.HasActiveCapture)
             {
                 LastAppliedWallpaperPath = null;
-                return new WallpaperApplyResult(false, "والپیپر اولیه برای بازگردانی در دسترس نیست.");
+                return new WallpaperApplyResult(false, _localization.GetString("Wallpaper.Error.NoOriginalCaptured"));
             }
 
             if (!_verifiedCurrentProcessSession)
@@ -197,7 +199,7 @@ public sealed class WallpaperService : IWallpaperService
                     _verifiedCurrentProcessSession = false;
                     return new WallpaperApplyResult(
                         false,
-                        "والپیپر ویندوز پس از آخرین اجرای برنامه به‌صورت دستی تغییر کرده است؛ برای حفظ انتخاب فعلی شما بازگردانی انجام نشد.");
+                        _localization.GetString("Wallpaper.Error.ManualChangeDetected"));
                 }
             }
 
@@ -213,7 +215,7 @@ public sealed class WallpaperService : IWallpaperService
                 _verifiedCurrentProcessSession = false;
                 return new WallpaperApplyResult(
                     false,
-                    "پس‌زمینهٔ قبلی ویندوز «رنگ یکدست (Solid Color)» بوده و از طریق API فعلی ویندوز به‌صورت خودکار قابل بازگردانی نیست.");
+                    _localization.GetString("Wallpaper.Error.SolidColorUnsupported"));
             }
 
             string? restoreSourcePath;
@@ -229,7 +231,7 @@ public sealed class WallpaperService : IWallpaperService
                     _verifiedCurrentProcessSession = false;
                     return new WallpaperApplyResult(
                         false,
-                        "فایل تصویر موقت قبلی ویندوز (TranscodedWallpaper) قابل بازیابی نیست.");
+                        _localization.GetString("Wallpaper.Error.TranscodedMissing"));
                 }
 
                 restoreSourcePath = snapshot.BackupImagePath;
@@ -244,7 +246,7 @@ public sealed class WallpaperService : IWallpaperService
                     _verifiedCurrentProcessSession = false;
                     return new WallpaperApplyResult(
                         false,
-                        "فایل تصویر پس‌زمینهٔ قبلی دیگر در مسیر اصلی وجود ندارد و قابل بازگردانی نیست.");
+                        _localization.GetString("Wallpaper.Error.OriginalDeleted"));
                 }
 
                 restoreSourcePath = snapshot.OriginalWallpaperPath;
@@ -278,7 +280,7 @@ public sealed class WallpaperService : IWallpaperService
                 _logger.Warning("تصویر و چینش پیش از شروع برنامه بازگردانی شد، اما چرخش خودکار Windows Slideshow از طریق SystemParametersInfoW قابل فعال‌سازی خودکار نیست.");
                 return new WallpaperApplyResult(
                     true,
-                    "تصویر و چینش قبلی بازگردانی شد؛ اما چرخش خودکار Windows Slideshow از طریق API فعلی قابل فعال‌سازی خودکار نیست.",
+                    _localization.GetString("Wallpaper.Restore.SlideshowLimitation"),
                     compatibleRestorePath,
                     0);
             }
@@ -288,25 +290,25 @@ public sealed class WallpaperService : IWallpaperService
                 _logger.Warning("آخرین تصویر و چینش پیش از شروع برنامه بازگردانی شد، اما سرویس پویا (Windows Spotlight) از طریق SystemParametersInfoW قابل فعال‌سازی خودکار نیست.");
                 return new WallpaperApplyResult(
                     true,
-                    "آخرین تصویر و چینش قبلی بازگردانی شد؛ اما سرویس پویا (Windows Spotlight) از طریق API فعلی قابل فعال‌سازی خودکار نیست.",
+                    _localization.GetString("Wallpaper.Restore.SpotlightLimitation"),
                     compatibleRestorePath,
                     0);
             }
 
             return new WallpaperApplyResult(
                 true,
-                "والپیپر و تنظیمات چینش قبلی ویندوز با موفقیت بازگردانی شد.",
+                _localization.GetString("Wallpaper.Restore.Success"),
                 compatibleRestorePath,
                 0);
         }
         catch (OperationCanceledException)
         {
-            return new WallpaperApplyResult(false, "بازگردانی والپیپر لغو شد.");
+            return new WallpaperApplyResult(false, _localization.GetString("Wallpaper.Restore.Cancelled"));
         }
         catch (Exception ex)
         {
             _logger.Error("خطای غیرمنتظره هنگام بازگردانی والپیپر قبلی.", ex);
-            return new WallpaperApplyResult(false, $"بازگردانی والپیپر با خطا مواجه شد: {ex.Message}");
+            return new WallpaperApplyResult(false, _localization.Format("Wallpaper.Restore.ErrorFormat", ex.Message));
         }
         finally
         {
@@ -321,13 +323,15 @@ public sealed class WallpaperService : IWallpaperService
             var monitors = _platformAdapter.GetMonitors();
             if (monitors.Count == 0)
             {
-                return "اطلاعات نمایشگر در دسترس نیست.";
+                return _localization.GetString("Wallpaper.Monitors.None");
             }
 
             var parts = monitors.Select((m, idx) =>
             {
-                var label = m.IsPrimary ? $"مانیتور {idx + 1} (اصلی)" : $"مانیتور {idx + 1}";
-                return $"{label}: {m.Width}×{m.Height}";
+                var label = m.IsPrimary
+                    ? _localization.Format("Wallpaper.Monitors.PrimaryFormat", idx + 1)
+                    : _localization.Format("Wallpaper.Monitors.SecondaryFormat", idx + 1);
+                return $"{label}: {BidiTextFormatter.IsolateLtr($"{m.Width}×{m.Height}")}";
             });
 
             return string.Join(" | ", parts);
@@ -335,7 +339,7 @@ public sealed class WallpaperService : IWallpaperService
         catch (Exception ex)
         {
             _logger.Warning($"خواندن رزولوشن مانیتورها ناموفق بود: {ex.Message}");
-            return "خطا در خواندن رزولوشن مانیتورها.";
+            return _localization.GetString("Wallpaper.Monitors.Error");
         }
     }
 

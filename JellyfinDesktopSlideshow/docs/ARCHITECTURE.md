@@ -15,14 +15,17 @@ JellyfinDesktopSlideshow/
 │   ├── ARCHITECTURE.md
 │   └── TESTING_AND_RELEASE.md
 ├── src/JellyfinDesktopSlideshow/
-│   ├── App.xaml / App.xaml.cs          # ریشهٔ DI دستی، هماهنگی پنجره‌ها، Tray و Shutdown امن
+│   ├── App.xaml / App.xaml.cs          # ورودی WPF و واگذاری راه‌اندازی به ApplicationBootstrapper
+│   ├── Composition/                    # ریشهٔ ترکیب وابستگی‌ها (ApplicationBootstrapper) و هماهنگی پنجره‌ها/Tray
+│   ├── Localization/                   # بومی‌سازی ماژولار JSON، راست‌چین/چپ‌چین خودکار و قالب‌بندی BiDi
+│   │   └── Packs/                      # بسته‌های زبان توکار (fa-IR.json، en-US.json)
 │   ├── Models/                         # مدل‌های خالص و DTOهای شبکه
-│   ├── Infrastructure/                 # وابستگی‌های بومی ویندوز (Registry، Credential Manager، Tray، Timer، Logging)
-│   ├── Services/                       # منطق کسب‌وکار و کلاینت HTTP (بدون وابستگی مستقیم به کنترل‌های XAML)
+│   ├── Infrastructure/                 # مسیرهای متمرکز (AppDataPaths)، Registry، Credential Manager، Tray، Timer، Logging
+│   ├── Services/                       # منطق کسب‌وکار، کلاینت HTTP و پاک‌سازی ردپاها (AppCleanupService)
 │   ├── ViewModels/                     # MVVM ViewModels + AsyncRelayCommand
-│   └── Views/                          # MainWindow، SettingsWindow، OverlayWindow و Converterها
+│   └── Views/                          # MainWindow، SettingsWindow، OverlayWindow و Converterها (DynamicTextFlowDirectionConverter)
 └── tests/JellyfinDesktopSlideshow.Tests/
-    └── ...                             # تست‌های واحد xUnit با Fake/Stub برای شبکه، رجیستری، تایمر و فایل‌سیستم
+    └── ...                             # تست‌های واحد xUnit با Fake/Stub برای شبکه، رجیستری، تایمر، بومی‌سازی و پاک‌سازی
 ```
 
 ### قانون طلایی معماری
@@ -86,6 +89,15 @@ JellyfinDesktopSlideshow/
    - `StartupService` مقدار رجیستری `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\JellyfinDesktopSlideshow` را مدیریت می‌کند و در صورت فعال بودن `StartMinimizedToTray` پارامتر `--minimized` را اضافه می‌نماید.
    - در `App.xaml.cs` مقدار `ShutdownMode = ShutdownMode.OnExplicitShutdown` تنظیم شده تا با بسته‌شدن یا مخفی‌شدن `MainWindow` برنامه در System Tray فعال بماند و تنها با دستور صریح «خروج کامل» تمام منابع پاک‌سازی و والپیپر (در صورت انتخاب) بازیابی شود.
 
+8. **ماژولار بودن، بومی‌سازی داده‌محور (RTL/LTR) و BiDi (`ApplicationBootstrapper` + `AppDataPaths` + `Localization/`):**
+   - **ریشهٔ ترکیب و مسیرهای متمرکز:** تمام مسیرهای دیسک در `Infrastructure/AppDataPaths.cs` یکپارچه شده‌اند و ساخت سرویس‌ها، پنجره‌ها، Tray، همگام‌سازی زبان و اجرای `--open-current` در `Composition/ApplicationBootstrapper.cs` از `App.xaml.cs` جدا شده است.
+   - **بسته‌های زبان ماژولار (`ILanguagePackProvider` / `JsonLanguagePackProvider` / `LocalizationService`):** متون رابط کاربری و پیام‌های سرویس‌ها به‌جای هاردکد شدن در C#/XAML از فایل‌های JSON تحت `Localization\Packs\*.json` (Embedded Resource) و نیز پوشهٔ اختیاری `languages\*.json` کنار فایل اجرایی بارگذاری می‌شوند. زنجیرهٔ fallback به‌ترتیب `Active -> en-US -> fa-IR -> [key]` است.
+   - **چیدمان خودکار راست‌چین/چپ‌چین و قالب‌بندی BiDi:** تغییر زبان (`fa-IR` راست‌چین، `en-US` چپ‌چین) بدون نیاز به ری‌استارت برنامه از طریق `LocalizationService.CurrentFlowDirection` به‌صورت زنده به `MainWindow`، `SettingsWindow`، `OverlayWindow` و منوها اعمال می‌شود و فرهنگ ترد (`CultureInfo`) را نیز همگام می‌کند. `BidiTextFormatter` و `DynamicTextFlowDirectionConverter` نام آثار Jellyfin (انگلیسی یا فارسی)، سال ساخت، نام سرور و نسخه را با Unicode Isolates (`LRI`/`RLI`...`PDI`) و تشخیص خودکار جهت متن نمایش می‌دهند تا ترتیب کلمات و پرانتزها در هیچ‌یک از دو حالت RTL و LTR به هم نریزد.
+
+9. **پاک‌سازی کش و حذف ردپاها (`IAppCleanupService` + `AppCleanupService` + تب ۸ تنظیمات):**
+   - `GetFootprint()` وضعیت فایل‌های کش Backdrop (`cache\backdrops`)، فایل‌های تبدیل‌شدهٔ والپیپر (`cache\wallpaper`)، لاگ‌ها (`logs\`)، بکاپ (`backup\`)، فایل‌های پنهان وضعیت (`wallpaper-state.json`، `current-wallpaper-item.json`، `icons\*.ico`)، `settings.json`، کلید ذخیره‌شده در Windows Credential Manager، کلید Startup رجیستری و میان‌بُر دسکتاپ را شمارش و نمایش می‌دهد.
+   - `CleanAsync(AppCleanupOptions)` به‌صورت انتخابی یا کامل (`FullWipe`) عمل می‌کند: در صورت انتخاب بازگردانی والپیپر اصلی، پیش از حذف `wallpaper-state.json` و `backup\` والپیپر ویندوز را بازمی‌گرداند؛ نشست/کلید امن را پاک می‌کند؛ کلید رجیستری، میان‌بُر دسکتاپ و آیکون شناور را حذف می‌کند؛ کش‌ها، لاگ‌ها، فایل‌های `.tmp` و `settings.json` را بدون بازنویسی مجدد پاک کرده و پوشهٔ `%LOCALAPPDATA%\JellyfinDesktopSlideshow` را در صورت خالی شدن حذف می‌نماید.
+
 ---
 
 ## ۳. راهنمای افزودن قابلیت جدید بدون شکستن ساختار
@@ -100,3 +112,7 @@ JellyfinDesktopSlideshow/
   1. متد را به `IJellyfinClient` و پیاده‌سازی آن را با `ApplyMediaBrowserAuthorization` به `JellyfinClient` اضافه کنید (هرگز توکن را در QueryString قرار ندهید).
   2. DTO را در `Models/JellyfinDtos.cs` تعریف کنید.
   3. با `StubHttpMessageHandler` در `JellyfinClientTests.cs` رفتار موفق و خطاهای `401/403/404/500` را تست کنید.
+
+- **افزودن زبان جدید بدون دست‌زدن به کد:**
+  1. یک فایل JSON جدید بر اساس `src/JellyfinDesktopSlideshow/Localization/Packs/en-US.json` بسازید و فیلدهای `code` (مثل `de-DE`)، `nativeName`، `isRightToLeft` (`true`/`false`) و `strings` را تنظیم کنید.
+  2. فایل را در `src/JellyfinDesktopSlideshow/Localization/Packs/` (به‌صورت خودکار Embedded می‌شود) یا در پوشهٔ `languages\` کنار فایل اجرایی قرار دهید؛ برنامه هنگام راه‌اندازی آن را در لیست زبان‌ها نمایش می‌دهد و کلیدهای ترجمه‌نشده را به انگلیسی برمی‌گرداند.

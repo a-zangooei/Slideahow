@@ -12,4 +12,5 @@ public interface ITrayService : IDisposable
 
     void Initialize();
     void UpdateState(string tooltipText, bool isPaused, bool canTogglePause, bool canOpenCurrentItem);
+    void UpdateLocalization();
 }

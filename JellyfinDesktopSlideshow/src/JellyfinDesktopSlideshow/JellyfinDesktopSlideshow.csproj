@@ -11,5 +11,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="JellyfinDesktopSlideshow.Tests" />
+    <EmbeddedResource Include="Localization\Packs\*.json" />
   </ItemGroup>
 </Project>

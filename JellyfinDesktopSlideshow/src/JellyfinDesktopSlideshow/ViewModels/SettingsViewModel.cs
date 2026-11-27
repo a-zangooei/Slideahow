@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using JellyfinDesktopSlideshow.Infrastructure;
+using JellyfinDesktopSlideshow.Localization;
 using JellyfinDesktopSlideshow.Models;
 using JellyfinDesktopSlideshow.Services;
 
@@ -18,11 +19,14 @@ public sealed class SettingsViewModel : ViewModelBase
     private readonly IStartupService _startupService;
     private readonly ISettingsService _settingsService;
     private readonly ILoggingService _logger;
+    private readonly IAppCleanupService? _cleanupService;
+    private readonly ILocalizationService _localization;
 
     private string _serverUrl = string.Empty;
     private string _username = string.Empty;
     private JellyfinAuthMethod _selectedAuthMethod = JellyfinAuthMethod.ApiKey;
-    private string _connectionStatus = "متصل نیست";
+    private string _selectedLanguageCode;
+    private string _connectionStatus = string.Empty;
     private string _serverDetails = string.Empty;
     private string _securityWarning = string.Empty;
     private string _errorMessage = string.Empty;
@@ -33,6 +37,8 @@ public sealed class SettingsViewModel : ViewModelBase
     private string _fallbackImagePath = string.Empty;
     private string _customUrlTemplate = string.Empty;
     private string _customUrlValidationMessage = string.Empty;
+    private ServerPublicInfo? _lastTestedServerInfo;
+    private bool _hasAttemptedMediaLoad;
 
     private bool _isBusy;
     private bool _isAuthenticated;
@@ -69,52 +75,31 @@ public sealed class SettingsViewModel : ViewModelBase
     private bool _startMinimizedToTray;
     private bool _minimizeToTrayOnClose = true;
 
+    // Tab 8: Cleanup & Footprints
+    private bool _cleanBackdropCache = true;
+    private bool _cleanWallpaperStagingCache = true;
+    private bool _cleanLogsAndHiddenFiles;
+    private bool _cleanCredentialsAndSession;
+    private bool _cleanOsTraces;
+    private bool _restoreOriginalWallpaperOnCleanup = true;
+    private bool _cleanResetSettingsFile;
+    private AppCleanupFootprint? _lastFootprint;
+    private string _cleanupCacheSummaryLine = string.Empty;
+    private string _cleanupHiddenSummaryLine = string.Empty;
+    private string _cleanupOsSummaryLine = string.Empty;
+    private string _cleanupRootSummaryLine = string.Empty;
+    private bool _hasAnyCleanupFootprint;
+
     public ObservableCollection<LibrarySelectionItem> Libraries { get; } = [];
 
-    public IReadOnlyList<KeyValuePair<WallpaperFitMode, string>> WallpaperFitModes { get; } =
-    [
-        new(WallpaperFitMode.Fill, "پر کردن صفحه (Fill)"),
-        new(WallpaperFitMode.Fit, "متناسب (Fit)"),
-        new(WallpaperFitMode.Stretch, "کشیده (Stretch)"),
-        new(WallpaperFitMode.Center, "مرکز (Center)"),
-        new(WallpaperFitMode.Span, "گسترده چند مانیتور (Span)")
-    ];
+    public IReadOnlyList<LanguageDefinition> AvailableLanguages => _localization.AvailableLanguages;
 
-    public IReadOnlyList<KeyValuePair<OfflineBehaviorMode, string>> OfflineBehaviorOptions { get; } =
-    [
-        new(OfflineBehaviorMode.UseCacheAndRetry, "استفاده از کش و تلاش مجدد خودکار"),
-        new(OfflineBehaviorMode.KeepCurrentWallpaper, "حفظ والپیپر فعلی بدون خطا"),
-        new(OfflineBehaviorMode.PauseSlideshow, "توقف (مکث) اسلایدشو هنگام قطع اتصال")
-    ];
-
-    public IReadOnlyList<KeyValuePair<PlaybackTargetType, string>> PlaybackTargetOptions { get; } =
-    [
-        new(PlaybackTargetType.DefaultBrowser, "مرورگر پیش‌فرض"),
-        new(PlaybackTargetType.JellyfinDesktopClient, "برنامهٔ Jellyfin دسکتاپ"),
-        new(PlaybackTargetType.CustomUrlTemplate, "الگوی URL سفارشی")
-    ];
-
-    public IReadOnlyList<KeyValuePair<DesktopIconMode, string>> DesktopIconModes { get; } =
-    [
-        new(DesktopIconMode.FloatingOverlay, "آیکون شناور روی صفحه"),
-        new(DesktopIconMode.DesktopShortcut, "آیکون استاندارد روی دسکتاپ (مانند سایر آیکون‌ها)"),
-        new(DesktopIconMode.Both, "هر دو حالت (آیکون شناور + آیکون دسکتاپ)"),
-        new(DesktopIconMode.Disabled, "غیرفعال")
-    ];
-
-    public IReadOnlyList<KeyValuePair<BackdropAspectFilterPreset, string>> BackdropAspectFilterPresets { get; } =
-    [
-        new(BackdropAspectFilterPreset.Standard, "پیشنهادی (حذف بنرهای دراز، مربعی و عمودی — 16:9 تا 21:9 مجاز)"),
-        new(BackdropAspectFilterPreset.StrictWidescreen, "سخت‌گیرانه عریض (نسبت 1.45 تا 2.45)"),
-        new(BackdropAspectFilterPreset.RelaxedBannerOnly, "فقط حذف بنرهای خیلی دراز و عمودی (نسبت 1.05 تا 3.20)"),
-        new(BackdropAspectFilterPreset.Custom, "بازهٔ دستی (سفارشی)")
-    ];
-
-    public IReadOnlyList<KeyValuePair<JellyfinAuthMethod, string>> AuthMethodOptions { get; } =
-    [
-        new(JellyfinAuthMethod.ApiKey, "کلید API (روش اصلی و پیشنهادی)"),
-        new(JellyfinAuthMethod.UsernamePassword, "نام کاربری و رمز عبور")
-    ];
+    public IReadOnlyList<KeyValuePair<WallpaperFitMode, string>> WallpaperFitModes => BuildWallpaperFitModes();
+    public IReadOnlyList<KeyValuePair<OfflineBehaviorMode, string>> OfflineBehaviorOptions => BuildOfflineBehaviorOptions();
+    public IReadOnlyList<KeyValuePair<PlaybackTargetType, string>> PlaybackTargetOptions => BuildPlaybackTargetOptions();
+    public IReadOnlyList<KeyValuePair<DesktopIconMode, string>> DesktopIconModes => BuildDesktopIconModes();
+    public IReadOnlyList<KeyValuePair<BackdropAspectFilterPreset, string>> BackdropAspectFilterPresets => BuildBackdropAspectFilterPresets();
+    public IReadOnlyList<KeyValuePair<JellyfinAuthMethod, string>> AuthMethodOptions => BuildAuthMethodOptions();
 
     public AsyncRelayCommand TestConnectionCommand { get; }
     public AsyncRelayCommand LogoutCommand { get; }
@@ -123,6 +108,11 @@ public sealed class SettingsViewModel : ViewModelBase
     public AsyncRelayCommand ClearFallbackImageCommand { get; }
     public AsyncRelayCommand ClearCacheCommand { get; }
     public AsyncRelayCommand PruneCacheCommand { get; }
+    public AsyncRelayCommand RefreshFootprintCommand { get; }
+    public AsyncRelayCommand QuickClearImageCacheCommand { get; }
+    public AsyncRelayCommand QuickClearLogsAndHiddenCommand { get; }
+    public AsyncRelayCommand CleanSelectedTracesCommand { get; }
+    public AsyncRelayCommand FullWipeAllTracesCommand { get; }
 
     public Task PendingWallpaperOperationTask { get; private set; } = Task.CompletedTask;
 
@@ -139,7 +129,9 @@ public sealed class SettingsViewModel : ViewModelBase
         IDesktopShortcutService desktopShortcutService,
         IStartupService startupService,
         ISettingsService settingsService,
-        ILoggingService logger)
+        ILoggingService logger,
+        IAppCleanupService? cleanupService = null,
+        ILocalizationService? localization = null)
     {
         _authService = authService;
         _libraryService = libraryService;
@@ -152,6 +144,11 @@ public sealed class SettingsViewModel : ViewModelBase
         _startupService = startupService;
         _settingsService = settingsService;
         _logger = logger;
+        _cleanupService = cleanupService;
+        _localization = localization ?? AppLocalization.Current;
+
+        _selectedLanguageCode = _localization.NormalizeLanguageCode(_settingsService.Current.Language);
+        _connectionStatus = _localization.GetString("Status.Disconnected");
 
         TestConnectionCommand = new AsyncRelayCommand(TestConnectionAsync, () => !IsBusy);
         LogoutCommand = new AsyncRelayCommand(LogoutAsync, () => !IsBusy && IsAuthenticated);
@@ -160,8 +157,36 @@ public sealed class SettingsViewModel : ViewModelBase
         ClearFallbackImageCommand = new AsyncRelayCommand(ClearFallbackImageAsync, () => !string.IsNullOrWhiteSpace(FallbackImagePath));
         ClearCacheCommand = new AsyncRelayCommand(ClearCacheAsync, () => !IsBusy);
         PruneCacheCommand = new AsyncRelayCommand(PruneCacheAsync, () => !IsBusy);
+        RefreshFootprintCommand = new AsyncRelayCommand(() =>
+        {
+            RefreshFootprint();
+            return Task.CompletedTask;
+        }, () => !IsBusy && _cleanupService is not null);
+        QuickClearImageCacheCommand = new AsyncRelayCommand(QuickClearImageCacheAsync, () => !IsBusy && _cleanupService is not null);
+        QuickClearLogsAndHiddenCommand = new AsyncRelayCommand(QuickClearLogsAndHiddenAsync, () => !IsBusy && _cleanupService is not null);
+        CleanSelectedTracesCommand = new AsyncRelayCommand(ExecuteSelectedCleanupAsync, () => !IsBusy && _cleanupService is not null);
+        FullWipeAllTracesCommand = new AsyncRelayCommand(ExecuteFullWipeAsync, () => !IsBusy && _cleanupService is not null);
 
+        _localization.LanguageChanged += OnLanguageChanged;
         LoadFromCurrentSettings();
+        RefreshFootprint();
+    }
+
+    public string SelectedLanguageCode
+    {
+        get => _selectedLanguageCode;
+        set
+        {
+            var normalized = _localization.NormalizeLanguageCode(value);
+            if (!string.Equals(_selectedLanguageCode, normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                _selectedLanguageCode = normalized;
+                SaveSetting(s => s.Language = normalized);
+                _localization.SetLanguage(normalized);
+                OnPropertyChanged();
+                StateSynchronized?.Invoke(this, EventArgs.Empty);
+            }
+        }
     }
 
     public string ServerUrl
@@ -347,7 +372,7 @@ public sealed class SettingsViewModel : ViewModelBase
                     }
                     else
                     {
-                        StatusMessage = "اعمال خودکار والپیپر غیرفعال شد.";
+                        StatusMessage = _localization.GetString("Settings.Status.WallpaperAutoDisabled");
                     }
                 }
                 else if (!string.IsNullOrWhiteSpace(_slideshowService.CurrentState.CurrentImagePath))
@@ -416,7 +441,7 @@ public sealed class SettingsViewModel : ViewModelBase
                 var applied = _desktopShortcutService.SetShortcutEnabled(wantShortcut);
                 if (!applied)
                 {
-                    ErrorMessage = "ایجاد یا حذف آیکون استاندارد دسکتاپ ناموفق بود.";
+                    ErrorMessage = _localization.GetString("Settings.Status.ShortcutToggleError");
                     _showDesktopShortcutIcon = _desktopShortcutService.IsShortcutPresent();
                     OnPropertyChanged(nameof(ShowDesktopShortcutIcon));
                     OnPropertyChanged(nameof(SelectedDesktopIconMode));
@@ -453,13 +478,14 @@ public sealed class SettingsViewModel : ViewModelBase
             ErrorMessage = string.Empty;
             StatusMessage = value switch
             {
-                DesktopIconMode.FloatingOverlay => "حالت آیکون شناور روی صفحه فعال شد.",
-                DesktopIconMode.DesktopShortcut => "آیکون استاندارد روی دسکتاپ («باز کردن در Jellyfin») ایجاد شد.",
-                DesktopIconMode.Both => "هر دو حالت آیکون شناور و آیکون استاندارد دسکتاپ فعال شدند.",
-                _ => "نمایش آیکون باز کردن Jellyfin غیرفعال شد."
+                DesktopIconMode.FloatingOverlay => _localization.GetString("Settings.Status.ModeFloating"),
+                DesktopIconMode.DesktopShortcut => _localization.GetString("Settings.Status.ModeShortcut"),
+                DesktopIconMode.Both => _localization.GetString("Settings.Status.ModeBoth"),
+                _ => _localization.GetString("Settings.Status.ModeDisabled")
             };
 
             OnPropertyChanged(nameof(SelectedDesktopIconMode));
+            RefreshFootprint();
             if (overlayChanged)
             {
                 StateSynchronized?.Invoke(this, EventArgs.Empty);
@@ -506,7 +532,7 @@ public sealed class SettingsViewModel : ViewModelBase
             var applied = _desktopShortcutService.SetShortcutEnabled(value);
             if (!applied)
             {
-                ErrorMessage = "ایجاد یا حذف آیکون استاندارد دسکتاپ ناموفق بود.";
+                ErrorMessage = _localization.GetString("Settings.Status.ShortcutToggleError");
                 _showDesktopShortcutIcon = _desktopShortcutService.IsShortcutPresent();
                 OnPropertyChanged(nameof(ShowDesktopShortcutIcon));
                 OnPropertyChanged(nameof(SelectedDesktopIconMode));
@@ -517,10 +543,11 @@ public sealed class SettingsViewModel : ViewModelBase
             SaveSetting(s => s.ShowDesktopShortcutIcon = value);
             ErrorMessage = string.Empty;
             StatusMessage = value
-                ? "آیکون استاندارد روی دسکتاپ («باز کردن در Jellyfin») ایجاد شد."
-                : "آیکون استاندارد از دسکتاپ حذف شد.";
+                ? _localization.GetString("Settings.Status.ShortcutCreated")
+                : _localization.GetString("Settings.Status.ShortcutDeleted");
             OnPropertyChanged(nameof(ShowDesktopShortcutIcon));
             OnPropertyChanged(nameof(SelectedDesktopIconMode));
+            RefreshFootprint();
         }
     }
 
@@ -768,7 +795,7 @@ public sealed class SettingsViewModel : ViewModelBase
                 var applied = _startupService.SetStartupEnabled(value, StartMinimizedToTray);
                 if (!applied)
                 {
-                    ErrorMessage = "تغییر وضعیت اجرای خودکار در رجیستری ویندوز ناموفق بود.";
+                    ErrorMessage = _localization.GetString("Settings.Status.StartupToggleError");
                     _launchOnWindowsStartup = _startupService.IsStartupEnabled();
                     OnPropertyChanged(nameof(LaunchOnWindowsStartup));
                     return;
@@ -776,8 +803,9 @@ public sealed class SettingsViewModel : ViewModelBase
 
                 SaveSetting(s => s.LaunchOnWindowsStartup = value);
                 StatusMessage = value
-                    ? "اجرای خودکار هنگام ورود به ویندوز فعال شد."
-                    : "اجرای خودکار غیرفعال شد.";
+                    ? _localization.GetString("Settings.Status.StartupEnabled")
+                    : _localization.GetString("Settings.Status.StartupDisabled");
+                RefreshFootprint();
             }
         }
     }
@@ -810,12 +838,88 @@ public sealed class SettingsViewModel : ViewModelBase
         }
     }
 
+    // Tab 8: Cleanup & Footprints
+    public bool CleanupAvailable => _cleanupService is not null;
+
+    public bool CleanBackdropCache
+    {
+        get => _cleanBackdropCache;
+        set => SetProperty(ref _cleanBackdropCache, value);
+    }
+
+    public bool CleanWallpaperStagingCache
+    {
+        get => _cleanWallpaperStagingCache;
+        set => SetProperty(ref _cleanWallpaperStagingCache, value);
+    }
+
+    public bool CleanLogsAndHiddenFiles
+    {
+        get => _cleanLogsAndHiddenFiles;
+        set => SetProperty(ref _cleanLogsAndHiddenFiles, value);
+    }
+
+    public bool CleanCredentialsAndSession
+    {
+        get => _cleanCredentialsAndSession;
+        set => SetProperty(ref _cleanCredentialsAndSession, value);
+    }
+
+    public bool CleanOsTraces
+    {
+        get => _cleanOsTraces;
+        set => SetProperty(ref _cleanOsTraces, value);
+    }
+
+    public bool RestoreOriginalWallpaperOnCleanup
+    {
+        get => _restoreOriginalWallpaperOnCleanup;
+        set => SetProperty(ref _restoreOriginalWallpaperOnCleanup, value);
+    }
+
+    public bool CleanResetSettingsFile
+    {
+        get => _cleanResetSettingsFile;
+        set => SetProperty(ref _cleanResetSettingsFile, value);
+    }
+
+    public string CleanupCacheSummaryLine
+    {
+        get => _cleanupCacheSummaryLine;
+        private set => SetProperty(ref _cleanupCacheSummaryLine, value);
+    }
+
+    public string CleanupHiddenSummaryLine
+    {
+        get => _cleanupHiddenSummaryLine;
+        private set => SetProperty(ref _cleanupHiddenSummaryLine, value);
+    }
+
+    public string CleanupOsSummaryLine
+    {
+        get => _cleanupOsSummaryLine;
+        private set => SetProperty(ref _cleanupOsSummaryLine, value);
+    }
+
+    public string CleanupRootSummaryLine
+    {
+        get => _cleanupRootSummaryLine;
+        private set => SetProperty(ref _cleanupRootSummaryLine, value);
+    }
+
+    public bool HasAnyCleanupFootprint
+    {
+        get => _hasAnyCleanupFootprint;
+        private set => SetProperty(ref _hasAnyCleanupFootprint, value);
+    }
+
     public async Task InitializeAsync()
     {
         LoadFromCurrentSettings();
         RefreshSessionPresentation();
         RefreshCacheSummary();
         MonitorsSummary = _wallpaperService.GetMonitorsSummary();
+        RefreshFootprint();
 
         if (IsAuthenticated && Libraries.Count == 0)
         {
@@ -831,6 +935,7 @@ public sealed class SettingsViewModel : ViewModelBase
         _selectedAuthMethod = string.Equals(s.AuthMethod, AppSettings.PasswordAuthMethod, StringComparison.OrdinalIgnoreCase)
             ? JellyfinAuthMethod.UsernamePassword
             : JellyfinAuthMethod.ApiKey;
+        _selectedLanguageCode = _localization.CurrentLanguage.Code;
         _includeMovies = s.IncludedItemTypes.Contains("Movie", StringComparer.OrdinalIgnoreCase);
         _includeSeries = s.IncludedItemTypes.Contains("Series", StringComparer.OrdinalIgnoreCase);
         _slideshowIntervalSeconds = s.SlideshowIntervalSeconds;
@@ -873,6 +978,7 @@ public sealed class SettingsViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowDesktopShortcutIcon));
         OnPropertyChanged(nameof(IsFloatingOverlayEnabled));
         OnPropertyChanged(nameof(SelectedDesktopIconMode));
+        RefreshFootprint();
     }
 
     public async Task<bool> LoginWithApiKeyAsync(string apiKey)
@@ -887,20 +993,21 @@ public sealed class SettingsViewModel : ViewModelBase
             RefreshSessionPresentation();
             await LoadLibrariesInternalAsync();
             await ApplyMediaSelectionInternalAsync();
-            StatusMessage = "اتصال با کلید API برقرار شد و فهرست رسانه‌ها دریافت گردید.";
+            StatusMessage = _localization.GetString("Status.ApiKeyConnectedAndLoaded");
+            RefreshFootprint();
             StateSynchronized?.Invoke(this, EventArgs.Empty);
             return true;
         }
         catch (JellyfinApiException ex)
         {
             ErrorMessage = ex.Message;
-            ConnectionStatus = "خطا در اتصال";
+            ConnectionStatus = _localization.GetString("Status.ConnectionError");
             return false;
         }
         catch (Exception ex)
         {
             _logger.Error("خطای غیرمنتظره هنگام اتصال با کلید API از پنجرهٔ تنظیمات.", ex);
-            ErrorMessage = "خطای غیرمنتظره هنگام اتصال با کلید API رخ داد.";
+            ErrorMessage = _localization.GetString("Auth.Error.UnexpectedApiKeyLogin");
             return false;
         }
         finally
@@ -921,20 +1028,21 @@ public sealed class SettingsViewModel : ViewModelBase
             RefreshSessionPresentation();
             await LoadLibrariesInternalAsync();
             await ApplyMediaSelectionInternalAsync();
-            StatusMessage = "ورود با موفقیت انجام شد و فهرست رسانه‌ها دریافت گردید.";
+            StatusMessage = _localization.GetString("Status.LoginConnectedAndLoaded");
+            RefreshFootprint();
             StateSynchronized?.Invoke(this, EventArgs.Empty);
             return true;
         }
         catch (JellyfinApiException ex)
         {
             ErrorMessage = ex.Message;
-            ConnectionStatus = "خطا در ورود";
+            ConnectionStatus = _localization.GetString("Status.LoginError");
             return false;
         }
         catch (Exception ex)
         {
             _logger.Error("خطای غیرمنتظره هنگام ورود از پنجرهٔ تنظیمات.", ex);
-            ErrorMessage = "خطای غیرمنتظره هنگام ورود رخ داد.";
+            ErrorMessage = _localization.GetString("Auth.Error.UnexpectedLogin");
             return false;
         }
         finally
@@ -947,15 +1055,265 @@ public sealed class SettingsViewModel : ViewModelBase
     {
         if (!ImageFormatValidator.IsValidImageFile(path))
         {
-            ErrorMessage = "فایل انتخاب‌شده تصویر معتبری نیست (فرمت‌های مجاز: JPG, PNG, WebP, BMP).";
+            ErrorMessage = _localization.GetString("Settings.Status.InvalidFallbackImage");
             return;
         }
 
         ErrorMessage = string.Empty;
         SaveSetting(s => s.FallbackImagePath = path);
         FallbackImagePath = path;
-        StatusMessage = "تصویر جایگزین ذخیره شد.";
+        StatusMessage = _localization.GetString("Settings.Status.FallbackSaved");
+        RefreshFootprint();
     }
+
+    public void RefreshFootprint()
+    {
+        if (_cleanupService is null)
+        {
+            HasAnyCleanupFootprint = false;
+            CleanupCacheSummaryLine = string.Empty;
+            CleanupHiddenSummaryLine = string.Empty;
+            CleanupOsSummaryLine = string.Empty;
+            CleanupRootSummaryLine = string.Empty;
+            return;
+        }
+
+        _lastFootprint = _cleanupService.GetFootprint();
+        ApplyFootprintPresentation(_lastFootprint);
+    }
+
+    public Task<AppCleanupResult?> ExecuteSelectedCleanupAsync()
+    {
+        var options = new AppCleanupOptions
+        {
+            ClearBackdropCache = CleanBackdropCache,
+            ClearWallpaperStagingCache = CleanWallpaperStagingCache,
+            ClearLogsAndHiddenFiles = CleanLogsAndHiddenFiles,
+            RemoveCredentialsAndSession = CleanCredentialsAndSession,
+            RemoveOsTraces = CleanOsTraces,
+            RestoreOriginalWallpaper = RestoreOriginalWallpaperOnCleanup,
+            DeleteSettingsAndReset = CleanResetSettingsFile
+        };
+
+        return RunCleanupAsync(options);
+    }
+
+    public Task<AppCleanupResult?> ExecuteFullWipeAsync()
+        => RunCleanupAsync(AppCleanupOptions.FullWipe(RestoreOriginalWallpaperOnCleanup));
+
+    private async Task QuickClearImageCacheAsync()
+        => await RunCleanupAsync(new AppCleanupOptions
+        {
+            ClearBackdropCache = true,
+            ClearWallpaperStagingCache = true
+        });
+
+    private async Task QuickClearLogsAndHiddenAsync()
+        => await RunCleanupAsync(new AppCleanupOptions
+        {
+            ClearLogsAndHiddenFiles = true
+        });
+
+    private async Task<AppCleanupResult?> RunCleanupAsync(AppCleanupOptions options)
+    {
+        if (_cleanupService is null)
+        {
+            return null;
+        }
+
+        IsBusy = true;
+        ErrorMessage = string.Empty;
+        StatusMessage = string.Empty;
+
+        try
+        {
+            var result = await _cleanupService.CleanAsync(options);
+
+            if (options.RemoveCredentialsAndSession || options.DeleteSettingsAndReset)
+            {
+                Libraries.Clear();
+                _hasAttemptedMediaLoad = false;
+                ItemsSummary = _localization.GetString("Settings.Tab2.SignInToLoadItems");
+            }
+
+            if (options.DeleteSettingsAndReset)
+            {
+                LoadFromCurrentSettings();
+            }
+            else if (options.RemoveCredentialsAndSession || options.RemoveOsTraces)
+            {
+                SyncDesktopShortcutStateFromSettings();
+                _launchOnWindowsStartup = _settingsService.Current.LaunchOnWindowsStartup;
+                OnPropertyChanged(nameof(LaunchOnWindowsStartup));
+            }
+
+            RefreshSessionPresentation();
+            RefreshCacheSummary();
+            RefreshFootprint();
+
+            if (result.Succeeded)
+            {
+                ErrorMessage = string.Empty;
+                StatusMessage = result.Message;
+            }
+            else
+            {
+                ErrorMessage = result.Message;
+            }
+
+            StateSynchronized?.Invoke(this, EventArgs.Empty);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            if (!options.ClearLogsAndHiddenFiles)
+            {
+                _logger.Error("خطا هنگام پاک‌سازی داده‌های برنامه.", ex);
+            }
+
+            ErrorMessage = ex.Message;
+            return null;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private void ApplyFootprintPresentation(AppCleanupFootprint footprint)
+    {
+        var yes = _localization.GetString("Settings.Tab8.Yes");
+        var no = _localization.GetString("Settings.Tab8.No");
+
+        CleanupCacheSummaryLine = _localization.Format(
+            "Settings.Tab8.Footprint.CacheLine",
+            footprint.BackdropCacheFiles,
+            footprint.BackdropCacheBytes / (1024.0 * 1024.0),
+            footprint.WallpaperStagingFiles,
+            footprint.WallpaperStagingBytes / (1024.0 * 1024.0));
+
+        CleanupHiddenSummaryLine = _localization.Format(
+            "Settings.Tab8.Footprint.HiddenLine",
+            footprint.LogFiles,
+            footprint.BackupFiles,
+            footprint.HasIconFile ? yes : no,
+            footprint.HasCurrentItemFile ? yes : no);
+
+        CleanupOsSummaryLine = _localization.Format(
+            "Settings.Tab8.Footprint.OsLine",
+            footprint.HasSettingsFile ? yes : no,
+            footprint.HasWallpaperStateFile ? yes : no,
+            footprint.HasSavedCredential ? yes : no,
+            footprint.HasStartupRegistryEntry ? yes : no,
+            footprint.HasDesktopShortcut ? yes : no);
+
+        CleanupRootSummaryLine = footprint.RootDirectoryExists
+            ? _localization.Format(
+                "Settings.Tab8.Footprint.RootPresentFormat",
+                BidiTextFormatter.IsolateLtr(footprint.RootDirectory))
+            : _localization.GetString("Settings.Tab8.Footprint.RootClean");
+
+        HasAnyCleanupFootprint = footprint.HasAnyFootprint;
+    }
+
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        var currentLangCode = _localization.CurrentLanguage.Code;
+        if (!string.Equals(_selectedLanguageCode, currentLangCode, StringComparison.OrdinalIgnoreCase))
+        {
+            _selectedLanguageCode = currentLangCode;
+            OnPropertyChanged(nameof(SelectedLanguageCode));
+        }
+
+        OnPropertyChanged(nameof(AvailableLanguages));
+        OnPropertyChanged(nameof(WallpaperFitModes));
+        OnPropertyChanged(nameof(OfflineBehaviorOptions));
+        OnPropertyChanged(nameof(PlaybackTargetOptions));
+        OnPropertyChanged(nameof(DesktopIconModes));
+        OnPropertyChanged(nameof(BackdropAspectFilterPresets));
+        OnPropertyChanged(nameof(AuthMethodOptions));
+
+        if (_authService.CurrentSession.IsAuthenticated)
+        {
+            RefreshSessionPresentation();
+        }
+        else if (_lastTestedServerInfo is not null)
+        {
+            ConnectionStatus = _localization.GetString("Status.ServerReachable");
+            ServerDetails = BidiTextFormatter.FormatServerDetails(
+                _lastTestedServerInfo.ServerName,
+                _lastTestedServerInfo.Version,
+                _localization.GetString("Settings.VersionLabel"));
+            SecurityWarning = _lastTestedServerInfo.IsNonLocalPlainHttp
+                ? _localization.GetString("Status.SecurityNonLocalHttpWarning")
+                : string.Empty;
+        }
+        else
+        {
+            ConnectionStatus = _localization.GetString("Status.Disconnected");
+            ServerDetails = string.Empty;
+            SecurityWarning = string.Empty;
+        }
+
+        RefreshCacheSummary();
+        MonitorsSummary = _wallpaperService.GetMonitorsSummary();
+        if (_hasAttemptedMediaLoad)
+        {
+            RefreshItemsSummaryText();
+        }
+
+        if (_lastFootprint is not null)
+        {
+            ApplyFootprintPresentation(_lastFootprint);
+        }
+
+        ValidateCustomUrlMessageWithoutSaving();
+    }
+
+    private IReadOnlyList<KeyValuePair<WallpaperFitMode, string>> BuildWallpaperFitModes() =>
+    [
+        new(WallpaperFitMode.Fill, _localization.GetString("Option.WallpaperFit.Fill")),
+        new(WallpaperFitMode.Fit, _localization.GetString("Option.WallpaperFit.Fit")),
+        new(WallpaperFitMode.Stretch, _localization.GetString("Option.WallpaperFit.Stretch")),
+        new(WallpaperFitMode.Center, _localization.GetString("Option.WallpaperFit.Center")),
+        new(WallpaperFitMode.Span, _localization.GetString("Option.WallpaperFit.Span"))
+    ];
+
+    private IReadOnlyList<KeyValuePair<OfflineBehaviorMode, string>> BuildOfflineBehaviorOptions() =>
+    [
+        new(OfflineBehaviorMode.UseCacheAndRetry, _localization.GetString("Option.Offline.UseCacheAndRetry")),
+        new(OfflineBehaviorMode.KeepCurrentWallpaper, _localization.GetString("Option.Offline.KeepCurrentWallpaper")),
+        new(OfflineBehaviorMode.PauseSlideshow, _localization.GetString("Option.Offline.PauseSlideshow"))
+    ];
+
+    private IReadOnlyList<KeyValuePair<PlaybackTargetType, string>> BuildPlaybackTargetOptions() =>
+    [
+        new(PlaybackTargetType.DefaultBrowser, _localization.GetString("Option.PlaybackTarget.DefaultBrowser")),
+        new(PlaybackTargetType.JellyfinDesktopClient, _localization.GetString("Option.PlaybackTarget.DesktopClient")),
+        new(PlaybackTargetType.CustomUrlTemplate, _localization.GetString("Option.PlaybackTarget.CustomUrl"))
+    ];
+
+    private IReadOnlyList<KeyValuePair<DesktopIconMode, string>> BuildDesktopIconModes() =>
+    [
+        new(DesktopIconMode.FloatingOverlay, _localization.GetString("Option.DesktopIcon.FloatingOverlay")),
+        new(DesktopIconMode.DesktopShortcut, _localization.GetString("Option.DesktopIcon.DesktopShortcut")),
+        new(DesktopIconMode.Both, _localization.GetString("Option.DesktopIcon.Both")),
+        new(DesktopIconMode.Disabled, _localization.GetString("Option.DesktopIcon.Disabled"))
+    ];
+
+    private IReadOnlyList<KeyValuePair<BackdropAspectFilterPreset, string>> BuildBackdropAspectFilterPresets() =>
+    [
+        new(BackdropAspectFilterPreset.Standard, _localization.GetString("Option.AspectPreset.Standard")),
+        new(BackdropAspectFilterPreset.StrictWidescreen, _localization.GetString("Option.AspectPreset.StrictWidescreen")),
+        new(BackdropAspectFilterPreset.RelaxedBannerOnly, _localization.GetString("Option.AspectPreset.RelaxedBannerOnly")),
+        new(BackdropAspectFilterPreset.Custom, _localization.GetString("Option.AspectPreset.Custom"))
+    ];
+
+    private IReadOnlyList<KeyValuePair<JellyfinAuthMethod, string>> BuildAuthMethodOptions() =>
+    [
+        new(JellyfinAuthMethod.ApiKey, _localization.GetString("AuthMethod.ApiKeySettings")),
+        new(JellyfinAuthMethod.UsernamePassword, _localization.GetString("AuthMethod.UsernamePasswordShort"))
+    ];
 
     private async Task TestConnectionAsync()
     {
@@ -966,24 +1324,29 @@ public sealed class SettingsViewModel : ViewModelBase
         try
         {
             var info = await _authService.TestConnectionAsync(ServerUrl);
-            ConnectionStatus = "سرور در دسترس است";
-            ServerDetails = $"{info.ServerName} — نسخه {info.Version}";
+            _lastTestedServerInfo = info;
+            ConnectionStatus = _localization.GetString("Status.ServerReachable");
+            ServerDetails = BidiTextFormatter.FormatServerDetails(
+                info.ServerName,
+                info.Version,
+                _localization.GetString("Settings.VersionLabel"));
 
             if (info.IsNonLocalPlainHttp)
             {
-                SecurityWarning = "هشدار امنیتی: اتصال HTTP غیررمزگذاری‌شده خارج از شبکهٔ محلی ناامن است؛ استفاده از HTTPS توصیه می‌شود.";
+                SecurityWarning = _localization.GetString("Status.SecurityNonLocalHttpWarning");
             }
         }
         catch (JellyfinApiException ex)
         {
-            ConnectionStatus = "ارتباط برقرار نشد";
+            _lastTestedServerInfo = null;
+            ConnectionStatus = _localization.GetString("Status.ServerUnreachable");
             ServerDetails = string.Empty;
             ErrorMessage = ex.Message;
         }
         catch (Exception ex)
         {
             _logger.Error("خطای غیرمنتظره هنگام تست اتصال.", ex);
-            ErrorMessage = "خطای غیرمنتظره هنگام تست اتصال رخ داد.";
+            ErrorMessage = _localization.GetString("Auth.Error.UnexpectedConnection");
         }
         finally
         {
@@ -1001,15 +1364,17 @@ public sealed class SettingsViewModel : ViewModelBase
             _slideshowService.Stop();
             await _authService.LogoutAsync();
             Libraries.Clear();
+            _hasAttemptedMediaLoad = false;
             RefreshSessionPresentation();
-            ItemsSummary = "برای دریافت عنوان‌ها ابتدا وارد حساب شوید.";
-            StatusMessage = "خروج از حساب با موفقیت انجام شد.";
+            ItemsSummary = _localization.GetString("Settings.Tab2.SignInToLoadItems");
+            StatusMessage = _localization.GetString("Status.LogoutSuccess");
+            RefreshFootprint();
             StateSynchronized?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {
             _logger.Error("خطا هنگام خروج از حساب در پنجرهٔ تنظیمات.", ex);
-            ErrorMessage = "خروج با خطا مواجه شد.";
+            ErrorMessage = _localization.GetString("Status.LogoutFailed");
         }
         finally
         {
@@ -1025,7 +1390,7 @@ public sealed class SettingsViewModel : ViewModelBase
         try
         {
             await LoadLibrariesInternalAsync();
-            StatusMessage = $"{Libraries.Count} کتابخانه دریافت شد.";
+            StatusMessage = _localization.Format("Settings.Tab2.LibrariesLoadedFormat", Libraries.Count);
         }
         catch (JellyfinApiException ex)
         {
@@ -1090,7 +1455,7 @@ public sealed class SettingsViewModel : ViewModelBase
 
         if (selectedTypes.Count == 0)
         {
-            ErrorMessage = "حداقل یکی از گزینه‌های فیلم یا سریال را انتخاب کنید.";
+            ErrorMessage = _localization.GetString("Settings.Tab2.SelectMovieOrSeries");
             return;
         }
 
@@ -1103,19 +1468,29 @@ public sealed class SettingsViewModel : ViewModelBase
 
         var items = await _libraryService.GetMediaItemsAsync(selectedLibraryIds, selectedTypes);
         _slideshowService.SetItems(items);
+        _hasAttemptedMediaLoad = true;
+        _lastLoadedItemsCount = items.Count;
+        _lastLoadedBackdropCount = items.Count(i => i.HasBackdrop);
 
-        var withBackdrop = items.Count(i => i.HasBackdrop);
-        ItemsSummary = items.Count == 0
-            ? "هیچ عنوانی در کتابخانه‌های انتخاب‌شده یافت نشد."
-            : $"تعداد کل عنوان‌ها: {items.Count} (دارای Backdrop: {withBackdrop})";
-        StatusMessage = "فهرست رسانه‌های اسلایدشو به‌روزرسانی شد.";
+        RefreshItemsSummaryText();
+        StatusMessage = _localization.GetString("Settings.Tab2.MediaUpdated");
+    }
+
+    private int _lastLoadedItemsCount;
+    private int _lastLoadedBackdropCount;
+
+    private void RefreshItemsSummaryText()
+    {
+        ItemsSummary = _lastLoadedItemsCount == 0
+            ? _localization.GetString("Media.NoneFound")
+            : _localization.Format("Media.SettingsSummaryFormat", _lastLoadedItemsCount, _lastLoadedBackdropCount);
     }
 
     private Task ClearFallbackImageAsync()
     {
         SaveSetting(s => s.FallbackImagePath = null);
         FallbackImagePath = string.Empty;
-        StatusMessage = "تصویر جایگزین حذف شد.";
+        StatusMessage = _localization.GetString("Settings.Status.FallbackCleared");
         return Task.CompletedTask;
     }
 
@@ -1123,7 +1498,8 @@ public sealed class SettingsViewModel : ViewModelBase
     {
         _cacheService.ClearCache();
         RefreshCacheSummary();
-        StatusMessage = "تمام فایل‌های کش محلی پاک‌سازی شدند.";
+        RefreshFootprint();
+        StatusMessage = _localization.GetString("Settings.Status.CacheCleared");
         return Task.CompletedTask;
     }
 
@@ -1131,7 +1507,8 @@ public sealed class SettingsViewModel : ViewModelBase
     {
         _cacheService.PruneCache(MaxCacheSizeMb, MaxCacheAgeDays);
         RefreshCacheSummary();
-        StatusMessage = "پاک‌سازی هوشمند کش بر اساس محدودیت حجم و عمر انجام شد.";
+        RefreshFootprint();
+        StatusMessage = _localization.GetString("Settings.Status.CachePruned");
         return Task.CompletedTask;
     }
 
@@ -1149,11 +1526,13 @@ public sealed class SettingsViewModel : ViewModelBase
             {
                 ErrorMessage = result.Message;
             }
+
+            RefreshFootprint();
         }
         catch (Exception ex)
         {
             _logger.Error("خطا هنگام بازگردانی والپیپر پس از غیرفعال‌شدن قابلیت.", ex);
-            ErrorMessage = "بازگردانی والپیپر قبلی با خطا مواجه شد.";
+            ErrorMessage = _localization.GetString("Settings.Status.WallpaperRestoreError");
         }
     }
 
@@ -1171,11 +1550,13 @@ public sealed class SettingsViewModel : ViewModelBase
             {
                 ErrorMessage = result.Message;
             }
+
+            RefreshFootprint();
         }
         catch (Exception ex)
         {
             _logger.Error("خطا هنگام اعمال والپیپر پس از فعال‌شدن قابلیت.", ex);
-            ErrorMessage = "اعمال والپیپر روی دسکتاپ با خطا مواجه شد.";
+            ErrorMessage = _localization.GetString("Settings.Status.WallpaperApplyError");
         }
     }
 
@@ -1200,7 +1581,7 @@ public sealed class SettingsViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(CustomUrlTemplate))
         {
             CustomUrlValidationMessage = IsCustomUrlTargetSelected
-                ? "الگوی URL را وارد کنید (مثال: {baseUrl}/web/index.html#!/details?id={itemId})."
+                ? _localization.GetString("Validation.CustomUrl.Prompt")
                 : string.Empty;
             SaveSetting(s => s.PlaybackTarget.CustomUrlTemplate = null);
             return;
@@ -1213,7 +1594,27 @@ public sealed class SettingsViewModel : ViewModelBase
         }
         else
         {
-            CustomUrlValidationMessage = error ?? "الگوی URL نامعتبر است.";
+            CustomUrlValidationMessage = error ?? _localization.GetString("Validation.CustomUrl.Invalid");
+        }
+    }
+
+    private void ValidateCustomUrlMessageWithoutSaving()
+    {
+        if (string.IsNullOrWhiteSpace(CustomUrlTemplate))
+        {
+            CustomUrlValidationMessage = IsCustomUrlTargetSelected
+                ? _localization.GetString("Validation.CustomUrl.Prompt")
+                : string.Empty;
+            return;
+        }
+
+        if (_itemLauncher.TryValidateCustomUrlTemplate(CustomUrlTemplate, out var error))
+        {
+            CustomUrlValidationMessage = string.Empty;
+        }
+        else
+        {
+            CustomUrlValidationMessage = error ?? _localization.GetString("Validation.CustomUrl.Invalid");
         }
     }
 
@@ -1222,13 +1623,16 @@ public sealed class SettingsViewModel : ViewModelBase
         var session = _authService.CurrentSession;
         IsAuthenticated = session.IsAuthenticated;
         ConnectionStatus = session.IsAuthenticated
-            ? (session.IsApiKeySession ? "متصل (کلید API)" : $"متصل ({session.Username})")
-            : "متصل نیست";
-        ServerDetails = string.IsNullOrWhiteSpace(session.ServerName)
-            ? string.Empty
-            : $"{session.ServerName} — نسخه {session.ServerVersion}";
+            ? (session.IsApiKeySession
+                ? _localization.GetString("Status.ConnectedApiKey")
+                : _localization.Format("Status.ConnectedUserFormat", BidiTextFormatter.Isolate(session.Username)))
+            : _localization.GetString("Status.Disconnected");
+        ServerDetails = BidiTextFormatter.FormatServerDetails(
+            session.ServerName,
+            session.ServerVersion,
+            _localization.GetString("Settings.VersionLabel"));
         SecurityWarning = session.IsNonLocalPlainHttp
-            ? "هشدار امنیتی: اتصال HTTP غیررمزگذاری‌شده خارج از شبکهٔ محلی ناامن است؛ استفاده از HTTPS توصیه می‌شود."
+            ? _localization.GetString("Status.SecurityNonLocalHttpWarning")
             : string.Empty;
     }
 
@@ -1236,7 +1640,7 @@ public sealed class SettingsViewModel : ViewModelBase
     {
         var stats = _cacheService.GetStats();
         var sizeMb = stats.TotalBytes / (1024.0 * 1024.0);
-        CacheSummary = $"فضای اشغال‌شدهٔ کش: {stats.FileCount} تصویر ({sizeMb:F2} مگابایت)";
+        CacheSummary = _localization.Format("Settings.Tab6.CacheOccupiedFormat", stats.FileCount, sizeMb);
     }
 
     private void SaveSetting(Action<AppSettings> mutate)
@@ -1252,7 +1656,7 @@ public sealed class SettingsViewModel : ViewModelBase
         if (ex.ErrorKind == JellyfinErrorKind.Unauthorized)
         {
             IsAuthenticated = false;
-            ConnectionStatus = "نشست منقضی شده";
+            ConnectionStatus = _localization.GetString("Status.SessionExpired");
         }
     }
 
@@ -1265,5 +1669,10 @@ public sealed class SettingsViewModel : ViewModelBase
         ClearFallbackImageCommand.RaiseCanExecuteChanged();
         ClearCacheCommand.RaiseCanExecuteChanged();
         PruneCacheCommand.RaiseCanExecuteChanged();
+        RefreshFootprintCommand.RaiseCanExecuteChanged();
+        QuickClearImageCacheCommand.RaiseCanExecuteChanged();
+        QuickClearLogsAndHiddenCommand.RaiseCanExecuteChanged();
+        CleanSelectedTracesCommand.RaiseCanExecuteChanged();
+        FullWipeAllTracesCommand.RaiseCanExecuteChanged();
     }
 }

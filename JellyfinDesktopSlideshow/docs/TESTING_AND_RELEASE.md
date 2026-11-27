@@ -16,7 +16,9 @@
 - `ItemLauncherTests` و `OverlayViewModelTests`: ساخت لینک رسمی وب، ارسال `Viewing` به نشست کلاینت دسکتاپ، پیشنهاد مرورگر در نبود کلاینت، جلوگیری از تزریق دستور در URL سفارشی و همگام‌سازی آیکون شناور.
 - `DesktopShortcutServiceTests`: ساخت و حذف میان‌بُر `.lnk` دسکتاپ با آرگومان `--open-current`، جلوگیری از ساخت نسخهٔ تکراری هنگام فراخوانی مجدد، ساخت و اعتبارسنجی فایل آیکون چندسایزی `.ico`، بازسازی آیکون خراب و پاک‌سازی فایل موقت `.tmp`، و مدیریت خطای نبود آیکون/فایل اجرایی.
 - `DesktopShortcutWorkflowTests`: ذخیره/بازیابی و بازیابی ایمن از فایل خراب در `CurrentWallpaperItemStore`، اجرای مستقل `--open-current` پس از توقف اسلایدشو از طریق `CurrentItemLaunchCoordinator`، خطای گویا هنگام نبود اطلاعات عنوان، و همگام‌سازی `MainViewModel` با `SettingsViewModel`.
-- `StartupServiceTests` و `SettingsViewModelTests` و `SettingsServiceTests`: ثبت کلید رجیستری با نقل‌قول ایمن و `--minimized`، جابه‌جایی حالت‌های `DesktopIconMode` (شناور / آیکون دسکتاپ / هر دو / غیرفعال)، بازگردانی خودکار والپیپر هنگام غیرفعال‌شدن `ApplyToDesktopWallpaper`، محدودسازی مقادیر تنظیمات ۷بخشی و عدم وجود رمز در `settings.json`.
+- `StartupServiceTests` و `SettingsViewModelTests` و `SettingsServiceTests`: ثبت کلید رجیستری با نقل‌قول ایمن و `--minimized`، جابه‌جایی حالت‌های `DesktopIconMode` (شناور / آیکون دسکتاپ / هر دو / غیرفعال)، بازگردانی خودکار والپیپر هنگام غیرفعال‌شدن `ApplyToDesktopWallpaper`، محدودسازی مقادیر تنظیمات، پایداری فیلد `Language` و عدم وجود رمز در `settings.json`.
+- `LocalizationAndBidiTests`: برابری صددرصدی کلیدهای `fa-IR.json` و `en-US.json`، بارگذاری بستهٔ زبان خارجی از پوشهٔ `languages/` و fallback زنجیره‌ای بدون تغییر کد، جابه‌جایی زنده بین RTL (`fa-IR`) و LTR (`en-US`)، قالب‌بندی BiDi برای عناوین لاتین/فارسی/ترکیبی در `BidiTextFormatter` و `DynamicTextFlowDirectionConverter` و همگام‌سازی زبان بین `MainViewModel` و `SettingsViewModel`.
+- `AppCleanupServiceTests`: شمارش ردپاها (`GetFootprint`)، پاک‌سازی انتخابی فقط کش تصاویر بدون دست‌زدن به تنظیمات و اعتبارنامه، حذف لاگ‌ها و فایل‌های پنهان بدون بازساخت `logs/`، پاک‌سازی کامل (`FullWipe`) با بازگردانی والپیپر اصلی پیش از حذف بکاپ، حذف رجیستری/میان‌بُر/توکن/تنظیمات و حذف پوشهٔ خالی ریشه، و اجرای دستورات تب ۸ در `SettingsViewModel`.
 
 ### یکپارچه‌سازی مداوم (GitHub Actions CI) و بسته‌بندی خروجی‌ها
 - **مسیر Workflow:** `.github/workflows/dotnet-wpf-ci.yml`
@@ -54,6 +56,13 @@
 8. **سناریوهای محدودیت ویندوز (`TranscodedWallpaper` / Slideshow / Spotlight / Solid Color):**
    - اگر پیش از شروع برنامه، ویندوز روی `Slideshow` یا `Spotlight` بوده است، بررسی کنید که پس از خروج/غیرفعال‌سازی آخرین تصویر استاتیک و چینش قبلی برمی‌گردد و پیام/لاگ برنامه صراحتاً اطلاع می‌دهد که چرخش خودکار Slideshow یا سرویس Spotlight باید در تنظیمات ویندوز دوباره انتخاب شود.
    - اگر پیش از شروع برنامه، پس‌زمینهٔ ویندوز `Solid Color` بوده است، مطمئن شوید هنگام بازگردانی صفحه سیاه نمی‌شود و پیام محدودیت در وضعیت و لاگ ثبت می‌گردد.
+9. **تغییر زبان (RTL/LTR) و نمایش عناوین Jellyfin:**
+   - در پنجرهٔ اصلی یا تب ۷ تنظیمات زبان را بین `فارسی` و `English` تغییر دهید و بررسی کنید بلافاصله بدون ری‌استارت، جهت تمام پنجره‌ها (`MainWindow`، `SettingsWindow`، `OverlayWindow`) و منوهای Tray/شناور بین راست‌چین و چپ‌چین جابه‌جا می‌شود و لیست‌های کشویی و پیام‌های وضعیت به زبان جدید درمی‌آیند.
+   - در حالت `فارسی` (RTL)، عناوین انگلیسی مانند `Andor (2022)` و عناوین فارسی/ترکیبی در جدول عنوان‌ها، پیش‌نمایش و Tooltip آیکون شناور باید بدون جابه‌جایی سال و پرانتز خوانا باشند.
+10. **پاک‌سازی و حذف ردپاها (تب ۸ تنظیمات):**
+   - با دکمهٔ «به‌روزرسانی وضعیت» موجودی کش، لاگ‌ها، فایل‌های پنهان و آثار سیستمی را ببینید.
+   - با «پاک‌سازی سریع کش تصاویر» مطمئن شوید فقط `cache\backdrops` و `cache\wallpaper` پاک می‌شوند و اتصال و تنظیمات حفظ می‌گردد.
+   - با «پاک‌سازی کامل همهٔ ردپاها» مطمئن شوید اسلایدشو متوقف، والپیپر اصلی بازگردانی، کلید Startup و میان‌بُر دسکتاپ حذف، توکن از Credential Manager پاک و پوشهٔ `%LOCALAPPDATA%\JellyfinDesktopSlideshow` به‌طور کامل حذف می‌شود.
 
 ---
 
@@ -74,6 +83,5 @@
 
 - **نصب:** پوشهٔ خروجی `publish` را در مسیر دلخواه (مثلاً `C:\Program Files\JellyfinDesktopSlideshow` یا `%LOCALAPPDATA%\Programs\JellyfinDesktopSlideshow`) کپی کرده و `JellyfinDesktopSlideshow.exe` را اجرا کنید.
 - **حذف کامل:**
-  1. پیش از حذف، از تب ۷ تیک «اجرای خودکار هنگام ورود به ویندوز» را بردارید (یا مقدار `JellyfinDesktopSlideshow` را از `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run` پاک کنید) و از تب ۴ حالت آیکون را روی غیرفعال/شناور بگذارید تا میان‌بُر دسکتاپ حذف شود.
-  2. از داخل تنظیمات تب ۱ «خروج از حساب» را بزنید تا توکن از Windows Credential Manager حذف شود.
-  3. برنامه را با «خروج کامل» ببندید و پوشهٔ برنامه به همراه `%LOCALAPPDATA%\JellyfinDesktopSlideshow` را پاک کنید.
+  1. ساده‌ترین روش: در تنظیمات، تب **«پاک‌سازی و حذف ردپاها»** را باز کرده و گزینهٔ **«پاک‌سازی کامل همهٔ ردپاها (شبیه حذف کامل)»** را اجرا کنید تا کش، لاگ‌ها، فایل‌های پنهان، تنظیمات، توکن امن، رجیستری Startup، میان‌بُر دسکتاپ و کل پوشهٔ `%LOCALAPPDATA%\JellyfinDesktopSlideshow` پاک شوند.
+  2. سپس برنامه را ببندید و در صورت نصب نسخهٔ پرتابل، پوشهٔ فایل اجرایی را حذف کنید (یا از Control Panel / Installed Apps حذف نمایید).

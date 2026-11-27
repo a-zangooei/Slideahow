@@ -1,4 +1,5 @@
 using JellyfinDesktopSlideshow.Infrastructure;
+using JellyfinDesktopSlideshow.Localization;
 using JellyfinDesktopSlideshow.Models;
 using JellyfinDesktopSlideshow.Services;
 
@@ -12,11 +13,12 @@ public sealed class OverlayViewModel : ViewModelBase
     private readonly ILoggingService _logger;
     private readonly IDesktopShortcutService? _desktopShortcutService;
     private readonly ICurrentItemLaunchCoordinator? _launchCoordinator;
+    private readonly ILocalizationService _localization;
 
     private MediaItem? _currentItem;
     private double _overlaySize = 44;
     private double _overlayOpacity = 0.85;
-    private string _toolTipText = "Jellyfin Desktop Slideshow — عنوانی در حال نمایش نیست";
+    private string _toolTipText;
 
     public AsyncRelayCommand OpenCurrentItemCommand { get; }
     public AsyncRelayCommand CreateOrUpdateDesktopShortcutCommand { get; }
@@ -32,7 +34,8 @@ public sealed class OverlayViewModel : ViewModelBase
         ISettingsService settingsService,
         ILoggingService logger,
         IDesktopShortcutService? desktopShortcutService = null,
-        ICurrentItemLaunchCoordinator? launchCoordinator = null)
+        ICurrentItemLaunchCoordinator? launchCoordinator = null,
+        ILocalizationService? localization = null)
     {
         _slideshowService = slideshowService;
         _itemLauncher = itemLauncher;
@@ -40,6 +43,8 @@ public sealed class OverlayViewModel : ViewModelBase
         _logger = logger;
         _desktopShortcutService = desktopShortcutService;
         _launchCoordinator = launchCoordinator;
+        _localization = localization ?? AppLocalization.Current;
+        _toolTipText = _localization.GetString("Overlay.ToolTip.None");
 
         ApplyAppearanceFromSettings();
         OpenCurrentItemCommand = new AsyncRelayCommand(OpenCurrentItemAsync, () => ResolveEffectiveItem() is not null);
@@ -53,6 +58,7 @@ public sealed class OverlayViewModel : ViewModelBase
         });
 
         _slideshowService.StateChanged += OnSlideshowStateChanged;
+        _localization.LanguageChanged += OnLanguageChanged;
 
         var initialItem = _launchCoordinator?.ResolveCurrentItem(_slideshowService.CurrentState.CurrentItem);
         if (initialItem is not null)
@@ -113,18 +119,19 @@ public sealed class OverlayViewModel : ViewModelBase
         UpdateToolTip(resolved);
     }
 
+    private void OnLanguageChanged(object? sender, EventArgs e)
+        => UpdateToolTip(ResolveEffectiveItem());
+
     private void UpdateToolTip(MediaItem? item)
     {
         if (item is null)
         {
-            ToolTipText = "Jellyfin Desktop Slideshow — عنوانی در حال نمایش نیست";
+            ToolTipText = _localization.GetString("Overlay.ToolTip.None");
             return;
         }
 
-        var yearSuffix = item.ProductionYear.HasValue
-            ? $" ({item.ProductionYear})"
-            : string.Empty;
-        ToolTipText = $"باز کردن: {item.Name}{yearSuffix}";
+        var formattedTitle = BidiTextFormatter.FormatTitle(item.Name, item.ProductionYear);
+        ToolTipText = _localization.Format("Overlay.ToolTip.OpenFormat", formattedTitle);
     }
 
     private async Task OpenCurrentItemAsync()
@@ -145,7 +152,7 @@ public sealed class OverlayViewModel : ViewModelBase
         catch (Exception ex)
         {
             _logger.Error($"خطا در باز کردن عنوان {item.Name} از آیکون شناور.", ex);
-            LaunchCompleted?.Invoke(this, new ItemLaunchResult(false, "خطای غیرمنتظره هنگام باز کردن عنوان رخ داد."));
+            LaunchCompleted?.Invoke(this, new ItemLaunchResult(false, _localization.GetString("Launch.Error.Unexpected")));
         }
     }
 

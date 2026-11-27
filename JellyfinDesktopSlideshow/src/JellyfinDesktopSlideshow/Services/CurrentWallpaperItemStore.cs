@@ -19,10 +19,7 @@ public sealed class CurrentWallpaperItemStore : ICurrentWallpaperItemStore
     public CurrentWallpaperItemStore(ILoggingService logger, string? storeFilePath = null)
     {
         _logger = logger;
-        _storeFilePath = storeFilePath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "JellyfinDesktopSlideshow",
-            "current-wallpaper-item.json");
+        _storeFilePath = storeFilePath ?? AppDataPaths.Default.CurrentWallpaperItemFilePath;
     }
 
     public MediaItem? Load()

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Security.Cryptography;
 using JellyfinDesktopSlideshow.Infrastructure;
+using JellyfinDesktopSlideshow.Localization;
 using JellyfinDesktopSlideshow.Models;
 
 namespace JellyfinDesktopSlideshow.Services;
@@ -17,6 +18,7 @@ public sealed class ImageService : IImageService
     private readonly ICacheService _cacheService;
     private readonly ISettingsService _settingsService;
     private readonly ILoggingService _logger;
+    private readonly ILocalizationService _localization;
     private readonly ConcurrentDictionary<string, IReadOnlyList<MediaItem>> _offlineCollectionMembersCache =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -25,13 +27,15 @@ public sealed class ImageService : IImageService
         IAuthenticationService authService,
         ICacheService cacheService,
         ISettingsService settingsService,
-        ILoggingService logger)
+        ILoggingService logger,
+        ILocalizationService? localization = null)
     {
         _client = client;
         _authService = authService;
         _cacheService = cacheService;
         _settingsService = settingsService;
         _logger = logger;
+        _localization = localization ?? AppLocalization.Current;
     }
 
     public async Task<BackdropResolveResult> ResolveBackdropAsync(
@@ -94,7 +98,7 @@ public sealed class ImageService : IImageService
                     knownMemberIds,
                     offlineInfo,
                     settings,
-                    lastFailureReason ?? "دریافت فهرست آثار عضو کالکشن ناموفق بود.");
+                    lastFailureReason ?? _localization.GetString("Image.Error.CollectionFetchFailed"));
             }
 
             return ResolveWithoutBackdrop(item, settings);
@@ -138,8 +142,10 @@ public sealed class ImageService : IImageService
                         LocalFilePath = cachedPath,
                         ImageInfo = imageInfo,
                         Message = candidate.IsFromCollectionMember
-                            ? $"تصویر از کش محلی اثر «{candidate.SourceItemName}» در کالکشن بارگذاری شد."
-                            : "تصویر از کش محلی بارگذاری شد."
+                            ? _localization.Format(
+                                "Image.Cache.LoadedCollectionMemberFormat",
+                                BidiTextFormatter.Isolate(candidate.SourceItemName))
+                            : _localization.GetString("Image.Cache.LoadedLocal")
                     };
                 }
 
@@ -156,7 +162,7 @@ public sealed class ImageService : IImageService
                 string.IsNullOrWhiteSpace(session.AccessToken))
             {
                 unauthenticated = true;
-                lastFailureReason = "اتصال فعال برقرار نیست.";
+                lastFailureReason = _localization.GetString("Image.Error.NoActiveConnection");
                 break;
             }
 
@@ -177,7 +183,7 @@ public sealed class ImageService : IImageService
                 {
                     anyNonAspectFailure = true;
                     _logger.Warning($"تصویر دریافت‌شده برای {candidate.SourceItemName} ({candidate.SourceItemId}) در Backdrop شماره {candidate.ImageIndex} ناقص یا نامعتبر بود.");
-                    lastFailureReason = "تصویر دریافت‌شده از سرور خراب یا ناقص است.";
+                    lastFailureReason = _localization.GetString("Image.Error.CorruptDownload");
                     continue;
                 }
 
@@ -211,7 +217,7 @@ public sealed class ImageService : IImageService
                 if (savedPath is null)
                 {
                     anyNonAspectFailure = true;
-                    lastFailureReason = "فضای دیسک کافی نیست یا نوشتن در پوشهٔ کش امکان‌پذیر نشد.";
+                    lastFailureReason = _localization.GetString("Image.Error.DiskFullOrPermission");
                     continue;
                 }
 
@@ -223,8 +229,10 @@ public sealed class ImageService : IImageService
                     LocalFilePath = savedPath,
                     ImageInfo = imageInfo,
                     Message = candidate.IsFromCollectionMember
-                        ? $"تصویر Backdrop اثر «{candidate.SourceItemName}» از کالکشن دریافت و در کش ذخیره شد."
-                        : "تصویر Backdrop دریافت و در کش ذخیره شد."
+                        ? _localization.Format(
+                            "Image.Status.SavedCollectionMemberFormat",
+                            BidiTextFormatter.Isolate(candidate.SourceItemName))
+                        : _localization.GetString("Image.Status.Saved")
                 };
             }
             catch (JellyfinApiException ex)
@@ -239,13 +247,14 @@ public sealed class ImageService : IImageService
 
         if (rejectedByAspectCount > 0 && !anyNonAspectFailure && !unauthenticated && !networkErrorOccurred)
         {
+            var isolatedItemName = BidiTextFormatter.Isolate(item.Name);
             return new BackdropResolveResult
             {
                 Status = BackdropResolveStatus.SkippedNoBackdrop,
                 ImageInfo = lastImageInfo,
                 Message = lastAspectReason is null
-                    ? $"هیچ‌یک از تصاویر Backdrop عنوان «{item.Name}» نسبت مناسب والپیپر دسکتاپ نداشتند."
-                    : $"عنوان «{item.Name}» رد شد: {lastAspectReason}"
+                    ? _localization.Format("Image.Aspect.AllRejectedFormat", isolatedItemName)
+                    : _localization.Format("Image.Aspect.ItemRejectedWithReasonFormat", isolatedItemName, lastAspectReason)
             };
         }
 
@@ -267,13 +276,13 @@ public sealed class ImageService : IImageService
                 knownMemberIds,
                 fallbackImageInfo,
                 settings,
-                lastFailureReason ?? "اتصال فعال برقرار نیست.");
+                lastFailureReason ?? _localization.GetString("Image.Error.NoActiveConnection"));
         }
 
         return TryFallbackOrFailure(
             fallbackImageInfo,
             settings,
-            lastFailureReason ?? "دریافت تصویر مناسب برای این عنوان ناموفق بود.");
+            lastFailureReason ?? _localization.GetString("Image.Error.ResolveFailed"));
     }
 
     internal async Task<IReadOnlyList<BackdropCandidate>> CollectBackdropCandidatesAsync(
@@ -456,20 +465,21 @@ public sealed class ImageService : IImageService
 
     private BackdropResolveResult ResolveWithoutBackdrop(MediaItem item, AppSettings settings)
     {
+        var isolatedName = BidiTextFormatter.Isolate(item.Name);
         if (ImageFormatValidator.IsValidImageFile(settings.FallbackImagePath))
         {
             return new BackdropResolveResult
             {
                 Status = BackdropResolveStatus.UsedFallback,
                 LocalFilePath = settings.FallbackImagePath,
-                Message = $"عنوان «{item.Name}» Backdrop ندارد؛ تصویر جایگزین نمایش داده شد."
+                Message = _localization.Format("Image.NoBackdrop.UsedFallbackFormat", isolatedName)
             };
         }
 
         return new BackdropResolveResult
         {
             Status = BackdropResolveStatus.SkippedNoBackdrop,
-            Message = $"عنوان «{item.Name}» تصویر Backdrop ندارد و تصویر جایگزینی تنظیم نشده است."
+            Message = _localization.Format("Image.NoBackdrop.SkippedFormat", isolatedName)
         };
     }
 
@@ -500,7 +510,7 @@ public sealed class ImageService : IImageService
                 Status = BackdropResolveStatus.UsedCacheOffline,
                 LocalFilePath = offlineCached,
                 ImageInfo = imageInfo,
-                Message = "سرور در دسترس نیست؛ نسخهٔ کش‌شده نمایش داده شد."
+                Message = _localization.GetString("Image.Offline.UsedCache")
             };
         }
 
@@ -547,7 +557,7 @@ public sealed class ImageService : IImageService
         }
     }
 
-    private static BackdropResolveResult TryFallbackOrFailure(
+    private BackdropResolveResult TryFallbackOrFailure(
         JellyfinImageInfo imageInfo,
         AppSettings settings,
         string reason)
@@ -559,7 +569,7 @@ public sealed class ImageService : IImageService
                 Status = BackdropResolveStatus.UsedFallback,
                 LocalFilePath = settings.FallbackImagePath,
                 ImageInfo = imageInfo,
-                Message = $"{reason} تصویر جایگزین نمایش داده شد."
+                Message = _localization.Format("Image.Fallback.ReasonWithFallbackFormat", reason)
             };
         }
 

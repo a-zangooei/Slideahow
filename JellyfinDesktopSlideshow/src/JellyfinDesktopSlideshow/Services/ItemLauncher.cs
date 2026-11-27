@@ -1,4 +1,5 @@
 using JellyfinDesktopSlideshow.Infrastructure;
+using JellyfinDesktopSlideshow.Localization;
 using JellyfinDesktopSlideshow.Models;
 
 namespace JellyfinDesktopSlideshow.Services;
@@ -10,19 +11,22 @@ public sealed class ItemLauncher : IItemLauncher
     private readonly ISettingsService _settingsService;
     private readonly IExternalLauncher _externalLauncher;
     private readonly ILoggingService _logger;
+    private readonly ILocalizationService _localization;
 
     public ItemLauncher(
         IJellyfinClient client,
         IAuthenticationService authService,
         ISettingsService settingsService,
         IExternalLauncher externalLauncher,
-        ILoggingService logger)
+        ILoggingService logger,
+        ILocalizationService? localization = null)
     {
         _client = client;
         _authService = authService;
         _settingsService = settingsService;
         _externalLauncher = externalLauncher;
         _logger = logger;
+        _localization = localization ?? AppLocalization.Current;
     }
 
     public async Task<ItemLaunchResult> OpenItemAsync(MediaItem item, CancellationToken cancellationToken = default)
@@ -34,7 +38,7 @@ public sealed class ItemLauncher : IItemLauncher
         if (serverUri is null &&
             !_settingsService.TryValidateServerUrl(_settingsService.Current.ServerUrl, out serverUri, out _))
         {
-            return new ItemLaunchResult(false, "آدرس سرور Jellyfin تنظیم نشده است.");
+            return new ItemLaunchResult(false, _localization.GetString("Auth.Error.InvalidServerUrl"));
         }
 
         var serverId = session.ServerId ?? _settingsService.Current.ServerId;
@@ -88,14 +92,14 @@ public sealed class ItemLauncher : IItemLauncher
         errorMessage = null;
         if (string.IsNullOrWhiteSpace(template))
         {
-            errorMessage = "الگوی URL سفارشی خالی است.";
+            errorMessage = _localization.GetString("Validation.CustomUrl.Empty");
             return false;
         }
 
         var trimmed = template.Trim();
         if (trimmed.Any(char.IsControl) || trimmed.Contains(' ') || trimmed.Contains('"') || trimmed.Contains('\''))
         {
-            errorMessage = "الگوی URL نباید شامل فاصله، کاراکتر کنترلی یا نقل‌قول باشد.";
+            errorMessage = _localization.GetString("Validation.CustomUrl.InvalidChars");
             return false;
         }
 
@@ -103,7 +107,7 @@ public sealed class ItemLauncher : IItemLauncher
             !trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
             !trimmed.StartsWith("{baseUrl}", StringComparison.OrdinalIgnoreCase))
         {
-            errorMessage = "مقصد سفارشی فقط باید با http://، https:// یا {baseUrl} شروع شود.";
+            errorMessage = _localization.GetString("Validation.CustomUrl.InvalidScheme");
             return false;
         }
 
@@ -116,7 +120,7 @@ public sealed class ItemLauncher : IItemLauncher
         if (!Uri.TryCreate(testExpanded, UriKind.Absolute, out var parsed) ||
             (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps))
         {
-            errorMessage = "الگوی URL پس از جایگزینی متغیرها یک آدرس وب معتبر نمی‌سازد.";
+            errorMessage = _localization.GetString("Validation.CustomUrl.InvalidExpanded");
             return false;
         }
 
@@ -127,8 +131,11 @@ public sealed class ItemLauncher : IItemLauncher
     {
         var opened = _externalLauncher.OpenHttpUrl(uri);
         return opened
-            ? new ItemLaunchResult(true, $"عنوان «{itemName}» در مرورگر پیش‌فرض باز شد.", LaunchedUrl: uri.AbsoluteUri)
-            : new ItemLaunchResult(false, "باز کردن مرورگر پیش‌فرض ناموفق بود.");
+            ? new ItemLaunchResult(
+                true,
+                _localization.Format("Launch.Status.OpenedBrowserFormat", BidiTextFormatter.Isolate(itemName)),
+                LaunchedUrl: uri.AbsoluteUri)
+            : new ItemLaunchResult(false, _localization.GetString("Launch.Error.BrowserFailed"));
     }
 
     private async Task<ItemLaunchResult> OpenInDesktopClientAsync(
@@ -142,7 +149,7 @@ public sealed class ItemLauncher : IItemLauncher
         {
             return new ItemLaunchResult(
                 false,
-                "برنامهٔ Jellyfin Media Player / Jellyfin Desktop روی این سیستم نصب نیست.",
+                _localization.GetString("Launch.Error.DesktopNotInstalled"),
                 CanFallbackToBrowser: true,
                 FallbackBrowserUrl: fallbackBrowserUri.AbsoluteUri);
         }
@@ -151,7 +158,7 @@ public sealed class ItemLauncher : IItemLauncher
         {
             return new ItemLaunchResult(
                 false,
-                "برای ارسال فرمان به کلاینت دسکتاپ، ابتدا باید به سرور متصل باشید.",
+                _localization.GetString("Launch.Error.DesktopNotConnected"),
                 CanFallbackToBrowser: true,
                 FallbackBrowserUrl: fallbackBrowserUri.AbsoluteUri);
         }
@@ -176,7 +183,7 @@ public sealed class ItemLauncher : IItemLauncher
             {
                 return new ItemLaunchResult(
                     false,
-                    "برنامهٔ Jellyfin دسکتاپ نصب است اما نشست فعال و آمادهٔ کنترل از راه دور پیدا نشد. برنامه را باز بگذارید یا عنوان را در مرورگر باز کنید.",
+                    _localization.GetString("Launch.Error.DesktopNoActiveSession"),
                     CanFallbackToBrowser: true,
                     FallbackBrowserUrl: fallbackBrowserUri.AbsoluteUri);
             }
@@ -193,14 +200,17 @@ public sealed class ItemLauncher : IItemLauncher
 
             return new ItemLaunchResult(
                 true,
-                $"عنوان «{item.Name}» در کلاینت {desktopSession.Client ?? "Jellyfin Desktop"} باز شد.");
+                _localization.Format(
+                    "Launch.Status.OpenedDesktopFormat",
+                    BidiTextFormatter.Isolate(item.Name),
+                    BidiTextFormatter.Isolate(desktopSession.Client ?? "Jellyfin Desktop")));
         }
         catch (JellyfinApiException ex)
         {
             _logger.Warning($"ارسال عنوان به کلاینت دسکتاپ ناموفق بود: {ex.Message}");
             return new ItemLaunchResult(
                 false,
-                $"باز کردن مستقیم در برنامهٔ Jellyfin ناموفق بود ({ex.Message}).",
+                _localization.Format("Launch.Error.DesktopFailedFormat", ex.Message),
                 CanFallbackToBrowser: true,
                 FallbackBrowserUrl: fallbackBrowserUri.AbsoluteUri);
         }
@@ -217,7 +227,7 @@ public sealed class ItemLauncher : IItemLauncher
         {
             return new ItemLaunchResult(
                 false,
-                validationError ?? "الگوی مقصد سفارشی نامعتبر است.",
+                validationError ?? _localization.GetString("Launch.Error.InvalidCustomTemplate"),
                 CanFallbackToBrowser: true,
                 FallbackBrowserUrl: fallbackBrowserUri.AbsoluteUri);
         }
@@ -228,17 +238,20 @@ public sealed class ItemLauncher : IItemLauncher
         {
             return new ItemLaunchResult(
                 false,
-                "آدرس ساخته‌شده از الگوی سفارشی معتبر نیست.",
+                _localization.GetString("Launch.Error.InvalidExpandedUrl"),
                 CanFallbackToBrowser: true,
                 FallbackBrowserUrl: fallbackBrowserUri.AbsoluteUri);
         }
 
         var opened = _externalLauncher.OpenHttpUrl(targetUri);
         return opened
-            ? new ItemLaunchResult(true, $"عنوان «{item.Name}» با مقصد سفارشی باز شد.", LaunchedUrl: targetUri.AbsoluteUri)
+            ? new ItemLaunchResult(
+                true,
+                _localization.Format("Launch.Status.OpenedCustomFormat", BidiTextFormatter.Isolate(item.Name)),
+                LaunchedUrl: targetUri.AbsoluteUri)
             : new ItemLaunchResult(
                 false,
-                "باز کردن لینک سفارشی ناموفق بود.",
+                _localization.GetString("Launch.Error.CustomFailed"),
                 CanFallbackToBrowser: true,
                 FallbackBrowserUrl: fallbackBrowserUri.AbsoluteUri);
     }

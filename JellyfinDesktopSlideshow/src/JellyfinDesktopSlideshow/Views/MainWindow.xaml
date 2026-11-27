@@ -2,17 +2,19 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:JellyfinDesktopSlideshow.Views"
-        Title="Jellyfin Desktop Slideshow"
-        Width="980"
-        Height="680"
-        MinWidth="820"
+        xmlns:loc="clr-namespace:JellyfinDesktopSlideshow.Localization"
+        Title="{Binding [App.Title], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+        Width="1020"
+        Height="700"
+        MinWidth="840"
         MinHeight="560"
-        FlowDirection="RightToLeft"
+        FlowDirection="{Binding CurrentFlowDirection, Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
         WindowStartupLocation="CenterScreen"
         Background="#F4F6F9">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
         <views:LocalPathToBitmapImageConverter x:Key="PathToImage" />
+        <views:DynamicTextFlowDirectionConverter x:Key="DynamicFlowDirection" />
     </Window.Resources>
 
     <Grid Margin="16">
@@ -23,7 +25,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- نوار وضعیت و دکمه‌های اصلی -->
+        <!-- Header status bar & primary actions -->
         <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="6" Padding="14" Margin="0,0,0,12">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -33,7 +35,7 @@
 
                 <StackPanel Grid.Column="0">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="وضعیت اتصال: " FontWeight="SemiBold" Foreground="#334155" />
+                        <TextBlock Text="{Binding [Main.ConnectionStatusLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Foreground="#334155" />
                         <TextBlock Text="{Binding ConnectionStatus}" FontWeight="Bold" Foreground="#0F172A" />
                     </StackPanel>
                     <TextBlock Text="{Binding ServerDetails}" Foreground="#475569" Margin="0,4,0,0" />
@@ -42,26 +44,37 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <ProgressBar Width="80" Height="12" IsIndeterminate="True"
+                    <ProgressBar Width="70" Height="12" IsIndeterminate="True"
                                  Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"
                                  Margin="0,0,10,0" />
-                    <Button Content="تنظیمات"
+                    <TextBlock Text="{Binding [Main.LanguageLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                               VerticalAlignment="Center"
+                               Foreground="#475569"
+                               Margin="0,0,6,0" />
+                    <ComboBox ItemsSource="{Binding AvailableLanguages}"
+                              SelectedValue="{Binding SelectedLanguageCode}"
+                              SelectedValuePath="Code"
+                              DisplayMemberPath="NativeName"
+                              MinWidth="130"
+                              Padding="8,5"
+                              Margin="0,0,10,0" />
+                    <Button Content="{Binding [Main.SettingsButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                             Command="{Binding OpenSettingsCommand}"
                             Padding="14,7"
                             FontWeight="SemiBold"
                             Margin="0,0,8,0" />
-                    <Button Content="کوچک‌کردن در Tray"
+                    <Button Content="{Binding [Main.MinimizeToTrayButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                             Command="{Binding MinimizeToTrayCommand}"
                             Padding="12,7"
                             Margin="0,0,8,0" />
-                    <Button Content="خروج کامل"
+                    <Button Content="{Binding [Main.ExitButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                             Command="{Binding ExitApplicationCommand}"
                             Padding="12,7" />
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- اتصال سریع در صورت متصل نبودن -->
+        <!-- Quick login bar when disconnected -->
         <Border Grid.Row="1"
                 Visibility="{Binding NeedsQuickLogin, Converter={StaticResource BoolToVisibility}}"
                 Background="#FFFFFF"
@@ -82,15 +95,15 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="آدرس سرور Jellyfin" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <TextBlock Text="{Binding [Main.ServerUrlLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                     <TextBox Text="{Binding ServerUrl, UpdateSourceTrigger=PropertyChanged}"
                              FlowDirection="LeftToRight"
                              Padding="8,6"
-                             ToolTip="مثال: http://192.168.1.10:8096" />
+                             ToolTip="{Binding [Main.ServerUrlToolTip], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="2">
-                    <TextBlock Text="روش اتصال" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <TextBlock Text="{Binding [Main.AuthMethodLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                     <ComboBox ItemsSource="{Binding AuthMethodOptions}"
                               SelectedValue="{Binding SelectedAuthMethod}"
                               SelectedValuePath="Key"
@@ -100,11 +113,11 @@
 
                 <StackPanel Grid.Column="4"
                             Visibility="{Binding IsApiKeyAuthSelected, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock Text="کلید API (Dashboard ← Advanced ← API Keys)" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <TextBlock Text="{Binding [Main.ApiKeyLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                     <PasswordBox x:Name="ApiKeyInput"
                                  FlowDirection="LeftToRight"
                                  Padding="8,6"
-                                 ToolTip="کلید API ساخته‌شده در پنل مدیریت Jellyfin" />
+                                 ToolTip="{Binding [Main.ApiKeyToolTip], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" />
                 </StackPanel>
 
                 <Grid Grid.Column="4"
@@ -115,13 +128,13 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0">
-                        <TextBlock Text="نام کاربری" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="{Binding [Main.UsernameLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                         <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
                                  FlowDirection="LeftToRight"
                                  Padding="8,6" />
                     </StackPanel>
                     <StackPanel Grid.Column="2">
-                        <TextBlock Text="رمز عبور" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="{Binding [Main.PasswordLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontWeight="SemiBold" Margin="0,0,0,4" />
                         <PasswordBox x:Name="PasswordInput"
                                      FlowDirection="LeftToRight"
                                      Padding="8,6" />
@@ -129,16 +142,16 @@
                 </Grid>
 
                 <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Bottom">
-                    <Button Content="تست اتصال"
+                    <Button Content="{Binding [Main.TestConnectionButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                             Command="{Binding TestConnectionCommand}"
                             Padding="12,7"
                             Margin="0,0,8,0" />
-                    <Button Content="اتصال با کلید API"
+                    <Button Content="{Binding [Main.ConnectApiKeyButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                             Click="ConnectWithApiKeyButton_Click"
                             Visibility="{Binding IsApiKeyAuthSelected, Converter={StaticResource BoolToVisibility}}"
                             Padding="14,7"
                             FontWeight="SemiBold" />
-                    <Button Content="ورود"
+                    <Button Content="{Binding [Main.LoginButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                             Click="LoginButton_Click"
                             Visibility="{Binding IsPasswordAuthSelected, Converter={StaticResource BoolToVisibility}}"
                             Padding="16,7"
@@ -147,7 +160,7 @@
             </Grid>
         </Border>
 
-        <!-- نمای اصلی: فهرست رسانه‌ها + پیش‌نمایش و کنترل اسلایدشو -->
+        <!-- Main content: media list + backdrop preview & slideshow controls -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="1.2*" />
@@ -157,16 +170,21 @@
 
             <Border Grid.Column="0" Background="#FFFFFF" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="6" Padding="12">
                 <DockPanel>
-                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                        <Button DockPanel.Dock="Left"
-                                Content="بروزرسانی فهرست"
-                                Command="{Binding RefreshMediaCommand}"
-                                Padding="10,5" />
-                        <TextBlock Text="عنوان‌های فعال اسلایدشو"
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding [Main.ActiveTitlesHeader], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                    FontWeight="Bold"
                                    FontSize="14"
                                    VerticalAlignment="Center" />
-                    </DockPanel>
+                        <Button Grid.Column="1"
+                                Content="{Binding [Main.RefreshListButton], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
+                                Command="{Binding RefreshMediaCommand}"
+                                Padding="10,5" />
+                    </Grid>
 
                     <DataGrid ItemsSource="{Binding MediaItems}"
                               SelectedItem="{Binding SelectedMediaItem, Mode=TwoWay}"
@@ -178,20 +196,55 @@
                               HeadersVisibility="Column"
                               BorderBrush="#E2E8F0">
                         <DataGrid.ContextMenu>
-                            <ContextMenu FlowDirection="RightToLeft">
-                                <MenuItem Header="باز کردن عنوان انتخاب‌شده / فعلی در Jellyfin"
+                            <ContextMenu FlowDirection="{Binding CurrentFlowDirection, Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}">
+                                <MenuItem Header="{Binding [Main.Menu.OpenItem], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                           Command="{Binding PlacementTarget.DataContext.OpenCurrentItemCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <MenuItem Header="ساخت / به‌روزرسانی میان‌بُر دسکتاپ"
+                                <MenuItem Header="{Binding [Main.Menu.CreateShortcut], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                           Command="{Binding PlacementTarget.DataContext.CreateOrUpdateDesktopShortcutCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <MenuItem Header="اعمال تصویر به‌عنوان والپیپر"
+                                <MenuItem Header="{Binding [Main.Menu.ApplyWallpaper], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                           Command="{Binding PlacementTarget.DataContext.ApplyCurrentWallpaperCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                             </ContextMenu>
                         </DataGrid.ContextMenu>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="نام عنوان" Binding="{Binding Name}" Width="2*" />
-                            <DataGridTextColumn Header="نوع" Binding="{Binding Type}" Width="75" />
-                            <DataGridTextColumn Header="سال" Binding="{Binding ProductionYear}" Width="65" />
-                            <DataGridCheckBoxColumn Header="Backdrop" Binding="{Binding HasBackdrop, Mode=OneWay}" Width="75" />
+                            <DataGridTextColumn Binding="{Binding Name}" Width="2*">
+                                <DataGridTextColumn.Header>
+                                    <TextBlock Text="{Binding [Main.Column.Name], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" />
+                                </DataGridTextColumn.Header>
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="FlowDirection" Value="{Binding Name, Converter={StaticResource DynamicFlowDirection}}" />
+                                        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                                        <Setter Property="VerticalAlignment" Value="Center" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Binding="{Binding Type}" Width="75">
+                                <DataGridTextColumn.Header>
+                                    <TextBlock Text="{Binding [Main.Column.Type], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" />
+                                </DataGridTextColumn.Header>
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="FlowDirection" Value="LeftToRight" />
+                                        <Setter Property="VerticalAlignment" Value="Center" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridTextColumn Binding="{Binding ProductionYear}" Width="65">
+                                <DataGridTextColumn.Header>
+                                    <TextBlock Text="{Binding [Main.Column.Year], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" />
+                                </DataGridTextColumn.Header>
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="FlowDirection" Value="LeftToRight" />
+                                        <Setter Property="VerticalAlignment" Value="Center" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            <DataGridCheckBoxColumn Binding="{Binding HasBackdrop, Mode=OneWay}" Width="80">
+                                <DataGridCheckBoxColumn.Header>
+                                    <TextBlock Text="{Binding [Main.Column.Backdrop], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" />
+                                </DataGridCheckBoxColumn.Header>
+                            </DataGridCheckBoxColumn>
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>
@@ -200,9 +253,13 @@
             <Border Grid.Column="2" Background="#FFFFFF" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="6" Padding="14">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
-                        <TextBlock Text="{Binding PreviewTitle}" FontWeight="Bold" FontSize="15" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding PreviewTitle}"
+                                   FlowDirection="{Binding PreviewTitle, Converter={StaticResource DynamicFlowDirection}}"
+                                   FontWeight="Bold"
+                                   FontSize="15"
+                                   TextTrimming="CharacterEllipsis" />
                         <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                            <TextBlock Text="شناسهٔ عنوان: " FontSize="11" Foreground="#64748B" />
+                            <TextBlock Text="{Binding [Main.Preview.ItemIdLabel], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}" FontSize="11" Foreground="#64748B" />
                             <TextBlock Text="{Binding CurrentSlideItemId}" FontSize="11" Foreground="#0F172A" FlowDirection="LeftToRight" />
                         </StackPanel>
                         <TextBlock Text="{Binding PreviewStatus}" Foreground="#475569" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" />
@@ -210,7 +267,7 @@
 
                     <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
                         <WrapPanel Margin="0,0,0,8">
-                            <Button Content="شروع اسلایدشو"
+                            <Button Content="{Binding [Main.Controls.Start], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                     Command="{Binding StartSlideshowCommand}"
                                     Padding="12,6"
                                     FontWeight="SemiBold"
@@ -219,24 +276,24 @@
                                     Command="{Binding TogglePauseCommand}"
                                     Padding="12,6"
                                     Margin="0,0,6,4" />
-                            <Button Content="قبلی"
+                            <Button Content="{Binding [Main.Controls.Previous], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                     Command="{Binding PreviousSlideCommand}"
                                     Padding="12,6"
                                     Margin="0,0,6,4" />
-                            <Button Content="بعدی"
+                            <Button Content="{Binding [Main.Controls.Next], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                     Command="{Binding NextSlideCommand}"
                                     Padding="12,6"
                                     Margin="0,0,6,4" />
-                            <Button Content="باز کردن عنوان فعلی"
+                            <Button Content="{Binding [Main.Controls.OpenCurrent], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                     Command="{Binding OpenCurrentItemCommand}"
                                     Padding="12,6"
                                     FontWeight="SemiBold"
                                     Margin="0,0,6,4" />
-                            <Button Content="ساخت میان‌بُر دسکتاپ"
+                            <Button Content="{Binding [Main.Controls.CreateShortcut], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                     Command="{Binding CreateOrUpdateDesktopShortcutCommand}"
                                     Padding="12,6"
                                     Margin="0,0,6,4" />
-                            <Button Content="اعمال روی والپیپر"
+                            <Button Content="{Binding [Main.Controls.ApplyWallpaper], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                     Command="{Binding ApplyCurrentWallpaperCommand}"
                                     Padding="12,6"
                                     Margin="0,0,6,4" />
@@ -244,7 +301,7 @@
                                     Command="{Binding ToggleOverlayCommand}"
                                     Padding="12,6"
                                     Margin="0,0,6,4" />
-                            <Button Content="باز کردن در مرورگر"
+                            <Button Content="{Binding [Main.Controls.OpenBrowser], Source={x:Static loc:AppLocalization.Current}, Mode=OneWay}"
                                     Command="{Binding OpenFallbackBrowserCommand}"
                                     Visibility="{Binding HasPendingFallbackBrowserUrl, Converter={StaticResource BoolToVisibility}}"
                                     Padding="12,6"
@@ -265,12 +322,16 @@
             </Border>
         </Grid>
 
-        <!-- نوار خلاصه پایین -->
+        <!-- Footer summary bar -->
         <Border Grid.Row="3" Background="#FFFFFF" BorderBrush="#DCE2EA" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,12,0,0">
-            <DockPanel>
-                <TextBlock DockPanel.Dock="Left" Text="{Binding CacheSummary}" Foreground="#64748B" FontSize="12" />
-                <TextBlock Text="{Binding ItemsSummary}" Foreground="#334155" HorizontalAlignment="Left" />
-            </DockPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="{Binding ItemsSummary}" Foreground="#334155" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="{Binding CacheSummary}" Foreground="#64748B" FontSize="12" VerticalAlignment="Center" />
+            </Grid>
         </Border>
     </Grid>
 </Window>

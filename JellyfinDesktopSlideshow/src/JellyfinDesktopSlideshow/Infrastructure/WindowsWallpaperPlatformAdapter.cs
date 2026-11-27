@@ -84,7 +84,7 @@ public sealed class WindowsWallpaperPlatformAdapter : IWallpaperPlatformAdapter
             imagePath,
             style,
             tile,
-            "تصویر پس‌زمینهٔ ویندوز با موفقیت تغییر کرد.");
+            Localization.AppLocalization.Current.GetString("Wallpaper.Platform.Applied"));
     }
 
     public PlatformWallpaperResult RestoreDesktopWallpaper(string imagePath, string? wallpaperStyle, string? tileWallpaper)
@@ -93,7 +93,7 @@ public sealed class WindowsWallpaperPlatformAdapter : IWallpaperPlatformAdapter
             imagePath,
             wallpaperStyle,
             tileWallpaper,
-            "والپیپر و تنظیمات چینش قبلی ویندوز با موفقیت بازگردانی شد.");
+            Localization.AppLocalization.Current.GetString("Wallpaper.Platform.Restored"));
     }
 
     public IReadOnlyList<MonitorResolutionInfo> GetMonitors()
@@ -156,7 +156,7 @@ public sealed class WindowsWallpaperPlatformAdapter : IWallpaperPlatformAdapter
         return new PlatformWallpaperResult(
             false,
             errorCode,
-            $"تغییر والپیپر ویندوز ناموفق بود (کد Win32: {errorCode} — {win32Message}).");
+            Localization.AppLocalization.Current.Format("Wallpaper.Platform.Win32ErrorFormat", errorCode, win32Message));
     }
 
     private static (string Style, string Tile) MapFitModeToRegistryValues(WallpaperFitMode fitMode)

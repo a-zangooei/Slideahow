@@ -22,6 +22,7 @@ public sealed class TrayService : ITrayService
     private const uint NifTip = 0x00000004;
 
     private readonly ILoggingService _logger;
+    private readonly Localization.ILocalizationService _localization;
     private HwndSource? _hwndSource;
     private IntPtr _iconHandle;
     private bool _ownsIconHandle;
@@ -35,8 +36,13 @@ public sealed class TrayService : ITrayService
     private bool _canOpenCurrentItem;
 
     private ContextMenu? _contextMenu;
+    private MenuItem? _showItem;
+    private MenuItem? _settingsItem;
     private MenuItem? _pauseResumeItem;
+    private MenuItem? _nextItem;
     private MenuItem? _openCurrentItemMenu;
+    private MenuItem? _desktopShortcutItem;
+    private MenuItem? _exitItem;
 
     public event EventHandler? ShowMainWindowRequested;
     public event EventHandler? OpenSettingsRequested;
@@ -46,9 +52,11 @@ public sealed class TrayService : ITrayService
     public event EventHandler? CreateDesktopShortcutRequested;
     public event EventHandler? ExitApplicationRequested;
 
-    public TrayService(ILoggingService logger)
+    public TrayService(ILoggingService logger, Localization.ILocalizationService? localization = null)
     {
         _logger = logger;
+        _localization = localization ?? Localization.AppLocalization.Current;
+        _tooltipText = _localization.GetString("Tray.ToolTip.Default");
     }
 
     public void Initialize()
@@ -71,6 +79,7 @@ public sealed class TrayService : ITrayService
 
         CreateIconHandle();
         BuildContextMenu();
+        _localization.LanguageChanged += OnLanguageChanged;
         AddOrUpdateTrayIcon();
     }
 
@@ -83,7 +92,7 @@ public sealed class TrayService : ITrayService
 
         if (_pauseResumeItem is not null)
         {
-            _pauseResumeItem.Header = _isPaused ? "ادامهٔ اسلایدشو" : "مکث اسلایدشو";
+            _pauseResumeItem.Header = _localization.GetString(_isPaused ? "Tray.Menu.Resume" : "Tray.Menu.Pause");
             _pauseResumeItem.IsEnabled = _canTogglePause;
         }
 
@@ -98,6 +107,26 @@ public sealed class TrayService : ITrayService
         }
     }
 
+    public void UpdateLocalization()
+    {
+        if (_contextMenu is null)
+        {
+            return;
+        }
+
+        _contextMenu.FlowDirection = _localization.CurrentFlowDirection;
+        if (_showItem is not null) _showItem.Header = _localization.GetString("Tray.Menu.ShowMain");
+        if (_settingsItem is not null) _settingsItem.Header = _localization.GetString("Tray.Menu.Settings");
+        if (_pauseResumeItem is not null)
+        {
+            _pauseResumeItem.Header = _localization.GetString(_isPaused ? "Tray.Menu.Resume" : "Tray.Menu.Pause");
+        }
+        if (_nextItem is not null) _nextItem.Header = _localization.GetString("Tray.Menu.Next");
+        if (_openCurrentItemMenu is not null) _openCurrentItemMenu.Header = _localization.GetString("Tray.Menu.OpenCurrent");
+        if (_desktopShortcutItem is not null) _desktopShortcutItem.Header = _localization.GetString("Tray.Menu.CreateShortcut");
+        if (_exitItem is not null) _exitItem.Header = _localization.GetString("Tray.Menu.Exit");
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -106,6 +135,7 @@ public sealed class TrayService : ITrayService
         }
 
         _disposed = true;
+        _localization.LanguageChanged -= OnLanguageChanged;
         RemoveTrayIcon();
 
         if (_hwndSource is not null)
@@ -122,50 +152,52 @@ public sealed class TrayService : ITrayService
         }
     }
 
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        UpdateLocalization();
+    }
+
     private void BuildContextMenu()
     {
-        var showItem = new MenuItem { Header = "نمایش پنجرهٔ اصلی" };
-        showItem.Click += (_, _) => ShowMainWindowRequested?.Invoke(this, EventArgs.Empty);
+        _showItem = new MenuItem();
+        _showItem.Click += (_, _) => ShowMainWindowRequested?.Invoke(this, EventArgs.Empty);
 
-        var settingsItem = new MenuItem { Header = "تنظیمات" };
-        settingsItem.Click += (_, _) => OpenSettingsRequested?.Invoke(this, EventArgs.Empty);
+        _settingsItem = new MenuItem();
+        _settingsItem.Click += (_, _) => OpenSettingsRequested?.Invoke(this, EventArgs.Empty);
 
         _pauseResumeItem = new MenuItem
         {
-            Header = _isPaused ? "ادامهٔ اسلایدشو" : "مکث اسلایدشو",
             IsEnabled = _canTogglePause
         };
         _pauseResumeItem.Click += (_, _) => TogglePauseRequested?.Invoke(this, EventArgs.Empty);
 
-        var nextItem = new MenuItem { Header = "تصویر بعدی" };
-        nextItem.Click += (_, _) => NextSlideRequested?.Invoke(this, EventArgs.Empty);
+        _nextItem = new MenuItem();
+        _nextItem.Click += (_, _) => NextSlideRequested?.Invoke(this, EventArgs.Empty);
 
         _openCurrentItemMenu = new MenuItem
         {
-            Header = "باز کردن عنوان فعلی",
             IsEnabled = _canOpenCurrentItem
         };
         _openCurrentItemMenu.Click += (_, _) => OpenCurrentItemRequested?.Invoke(this, EventArgs.Empty);
 
-        var desktopShortcutItem = new MenuItem { Header = "ساخت / به‌روزرسانی میان‌بُر دسکتاپ" };
-        desktopShortcutItem.Click += (_, _) => CreateDesktopShortcutRequested?.Invoke(this, EventArgs.Empty);
+        _desktopShortcutItem = new MenuItem();
+        _desktopShortcutItem.Click += (_, _) => CreateDesktopShortcutRequested?.Invoke(this, EventArgs.Empty);
 
-        var exitItem = new MenuItem { Header = "خروج کامل" };
-        exitItem.Click += (_, _) => ExitApplicationRequested?.Invoke(this, EventArgs.Empty);
+        _exitItem = new MenuItem();
+        _exitItem.Click += (_, _) => ExitApplicationRequested?.Invoke(this, EventArgs.Empty);
 
-        _contextMenu = new ContextMenu
-        {
-            FlowDirection = FlowDirection.RightToLeft
-        };
-        _contextMenu.Items.Add(showItem);
-        _contextMenu.Items.Add(settingsItem);
+        _contextMenu = new ContextMenu();
+        _contextMenu.Items.Add(_showItem);
+        _contextMenu.Items.Add(_settingsItem);
         _contextMenu.Items.Add(new Separator());
         _contextMenu.Items.Add(_pauseResumeItem);
-        _contextMenu.Items.Add(nextItem);
+        _contextMenu.Items.Add(_nextItem);
         _contextMenu.Items.Add(_openCurrentItemMenu);
-        _contextMenu.Items.Add(desktopShortcutItem);
+        _contextMenu.Items.Add(_desktopShortcutItem);
         _contextMenu.Items.Add(new Separator());
-        _contextMenu.Items.Add(exitItem);
+        _contextMenu.Items.Add(_exitItem);
+
+        UpdateLocalization();
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)

@@ -331,21 +331,20 @@ public sealed class DesktopShortcutService : IDesktopShortcutService
     private readonly ILoggingService _logger;
     private readonly Func<string?> _executablePathProvider;
     private readonly string _iconFilePath;
+    private readonly Localization.ILocalizationService _localization;
 
     public DesktopShortcutService(
         IDesktopShortcutPlatformAdapter adapter,
         ILoggingService logger,
         Func<string?>? executablePathProvider = null,
-        string? iconFilePath = null)
+        string? iconFilePath = null,
+        Localization.ILocalizationService? localization = null)
     {
         _adapter = adapter;
         _logger = logger;
         _executablePathProvider = executablePathProvider ?? ResolveCurrentExecutablePath;
-        _iconFilePath = iconFilePath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "JellyfinDesktopSlideshow",
-            "icons",
-            "jellyfin-desktop.ico");
+        _iconFilePath = iconFilePath ?? AppDataPaths.Default.DesktopShortcutIconFilePath;
+        _localization = localization ?? Localization.AppLocalization.Current;
     }
 
     public string ShortcutFilePath
@@ -377,7 +376,7 @@ public sealed class DesktopShortcutService : IDesktopShortcutService
             var exePath = _executablePathProvider();
             if (string.IsNullOrWhiteSpace(exePath))
             {
-                const string message = "مسیر فایل اجرایی برنامه برای ساخت میان‌بُر دسکتاپ شناسایی نشد.";
+                var message = _localization.GetString("Shortcut.MissingExecutable");
                 _logger.Warning(message);
                 return new DesktopShortcutUpdateResult(false, alreadyExisted, shortcutPath, message);
             }
@@ -385,7 +384,7 @@ public sealed class DesktopShortcutService : IDesktopShortcutService
             var iconPath = _adapter.EnsureDesktopIconFile(_iconFilePath);
             if (string.IsNullOrWhiteSpace(iconPath))
             {
-                const string message = "ساخت یا شناسایی فایل آیکون استاندارد میان‌بُر ناموفق بود.";
+                var message = _localization.GetString("Shortcut.MissingIcon");
                 _logger.Warning(message);
                 return new DesktopShortcutUpdateResult(false, alreadyExisted, shortcutPath, message);
             }
@@ -398,8 +397,8 @@ public sealed class DesktopShortcutService : IDesktopShortcutService
                 iconPath);
 
             var messageText = alreadyExisted
-                ? "میان‌بر استاندارد دسکتاپ («باز کردن در Jellyfin») بدون ایجاد نسخهٔ تکراری به‌روزرسانی شد."
-                : "میان‌بر استاندارد «باز کردن در Jellyfin» روی دسکتاپ ساخته شد.";
+                ? _localization.GetString("Shortcut.UpdatedNoDuplicate")
+                : _localization.GetString("Shortcut.Created");
 
             return new DesktopShortcutUpdateResult(true, alreadyExisted, shortcutPath, messageText);
         }
@@ -410,7 +409,7 @@ public sealed class DesktopShortcutService : IDesktopShortcutService
                 false,
                 alreadyExisted,
                 shortcutPath,
-                $"ساخت یا به‌روزرسانی میان‌بُر دسکتاپ ناموفق بود: {ex.Message}");
+                _localization.Format("Shortcut.FailedFormat", ex.Message));
         }
     }
 
