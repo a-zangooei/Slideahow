@@ -225,7 +225,10 @@ public sealed class LocalizationAndBidiTests : IDisposable
         Assert.False(localization.IsRightToLeft);
         Assert.Equal("Disconnected", mainVm.ConnectionStatus);
         Assert.Equal("Disconnected", settingsVm.ConnectionStatus);
-        Assert.Equal("Fill (Crop to fit)", settingsVm.WallpaperFitModes[0].Value);
+        Assert.Equal("Fill", settingsVm.WallpaperFitModes[0].Value);
+        Assert.Equal(
+            ["Fill", "Fit", "Stretch", "Center", "Span (Multi-Monitor)"],
+            settingsVm.WallpaperFitModes.Select(m => m.Value).ToArray());
         Assert.Equal("API Key (Recommended)", settingsVm.AuthMethodOptions[0].Value);
 
         // Switching from MainViewModel propagates back to SettingsViewModel & persistence
@@ -234,9 +237,67 @@ public sealed class LocalizationAndBidiTests : IDisposable
         Assert.Equal("fa-IR", settingsVm.SelectedLanguageCode);
         Assert.True(localization.IsRightToLeft);
         Assert.Equal("قطع", mainVm.ConnectionStatus);
+        Assert.Equal("پر کردن صفحه (Fill)", settingsVm.WallpaperFitModes[0].Value);
+        Assert.Equal(
+            ["پر کردن صفحه (Fill)", "متناسب (Fit)", "کشیده (Stretch)", "مرکز (Center)", "گسترده چند مانیتور (Span)"],
+            settingsVm.WallpaperFitModes.Select(m => m.Value).ToArray());
 
         var reloaded = new SettingsService(logger, settingsPath).Load();
         Assert.Equal("fa-IR", reloaded.Language);
+    }
+
+    [Fact]
+    public void SettingsViewModel_WallpaperFitModes_ReflectActiveLanguageAccurately()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var settingsPath = Path.Combine(_tempDir, "settings-fit.json");
+        var logger = new NullLoggingService();
+        var settingsService = new SettingsService(logger, settingsPath);
+        settingsService.Load();
+
+        var provider = new JsonLanguagePackProvider(
+            typeof(LocalizationService).Assembly,
+            Path.Combine(_tempDir, "no-ext-fit"));
+        var localization = new LocalizationService(provider, "fa-IR");
+
+        var settingsVm = new SettingsViewModel(
+            new StubAuthService(),
+            new StubLibraryService(),
+            new CacheService(logger, Path.Combine(_tempDir, "cache-fit")),
+            new StubSlideshowService(),
+            new StubWallpaperService(),
+            new StubItemLauncher(),
+            new StubOverlayService(),
+            new StubDesktopShortcutService(),
+            new StubStartupService(),
+            settingsService,
+            logger,
+            cleanupService: null,
+            localization: localization);
+
+        // Persian initial options
+        Assert.Equal(
+            [
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Fill, "پر کردن صفحه (Fill)"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Fit, "متناسب (Fit)"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Stretch, "کشیده (Stretch)"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Center, "مرکز (Center)"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Span, "گسترده چند مانیتور (Span)")
+            ],
+            settingsVm.WallpaperFitModes);
+
+        // Switch to English
+        settingsVm.SelectedLanguageCode = "en-US";
+
+        Assert.Equal(
+            [
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Fill, "Fill"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Fit, "Fit"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Stretch, "Stretch"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Center, "Center"),
+                new KeyValuePair<WallpaperFitMode, string>(WallpaperFitMode.Span, "Span (Multi-Monitor)")
+            ],
+            settingsVm.WallpaperFitModes);
     }
 
     public void Dispose()
